@@ -1,4 +1,6 @@
 import streamlit as st
+import pandas as pd
+import os
 from datetime import datetime
 from config.page_config import configure_page
 from utils.data_loader import load_data
@@ -80,7 +82,6 @@ def _check_data_loaded():
         return True
     
     # Verifica se existe arquivo parquet processado
-    import os
     if os.path.exists("requisicoes_data.parquet"):
         st.session_state.data_processed = True
         return True
@@ -155,8 +156,6 @@ def _process_uploaded_files(uploaded_req, uploaded_minha):
     """Processa os arquivos enviados"""
     try:
         with st.spinner("🔄 Processando arquivos... Isso pode levar alguns segundos."):
-            import pandas as pd
-            
             # Carregar dados dos uploads
             df_req = pd.read_excel(uploaded_req)
             df_req_minha = pd.read_excel(uploaded_minha)
@@ -179,47 +178,77 @@ def _process_uploaded_files(uploaded_req, uploaded_minha):
     except Exception as e:
         st.error(f"❌ Erro ao processar arquivos: {str(e)}")
         st.error("Verifique se os arquivos estão no formato correto e tente novamente.")
+        # Mostrar informações específicas do erro para debug
+        import traceback
+        with st.expander("Detalhes do erro (para debug)"):
+            st.code(traceback.format_exc())
 
 def _process_data_original_logic(df_req, df_req_minha):
     """Aplica a lógica original de processamento dos dados"""
-    # Filtrar por RESOLVEDOR_PADRAO
-    df_req = df_req[df_req['RESOLVEDOR_PADRAO'] == 'AUTOMAÇÃO TELECOM']
+    # Verificar se a coluna RESOLVEDOR_PADRAO existe
+    if 'RESOLVEDOR_PADRAO' in df_req.columns:
+        df_req = df_req[df_req['RESOLVEDOR_PADRAO'] == 'AUTOMAÇÃO TELECOM']
     
-    # Selecionar colunas do df_req 
-    df_req = df_req[['NUM_CHAMADO', 'DATA_ABERTURA', 'DATA_PREV_SOLUCAO',
-                     'DATA_QUEBRA_SLA', 'SLA_VIOLADO', 'DATA_RESOLUCAO',
-                     'DATA_FECHAMENTO', 'Status', 'TITULO', 'SOLICITANTE', 'RESPONSAVEL']]
+    # Selecionar apenas colunas que existem no df_req
+    required_cols_req = ['NUM_CHAMADO', 'DATA_ABERTURA', 'DATA_PREV_SOLUCAO',
+                         'DATA_QUEBRA_SLA', 'SLA_VIOLADO', 'DATA_RESOLUCAO',
+                         'DATA_FECHAMENTO', 'Status', 'TITULO', 'SOLICITANTE', 'RESPONSAVEL']
     
-    # Selecionar colunas do df_req_minha 
-    df_req_minha = df_req_minha[['Requisição de Serviço','Data Esperada', 'Resumo', 
-                                 'Status', 'Proprietário', 'Cliente', 'Criado em', 
-                                 'Resolvido em', 'SLA - Data Prevista Solução']]
+    available_cols_req = [col for col in required_cols_req if col in df_req.columns]
+    df_req = df_req[available_cols_req]
     
-    # Renomear colunas 
-    df_req_minha.rename(columns={'Requisição de Serviço': 'NUM_CHAMADO',
-                                 'Resumo': 'TITULO',
-                                 'Proprietário': 'RESPONSAVEL',
-                                 'Cliente': 'SOLICITANTE',
-                                 'Resolvido em': 'DATA_RESOLUCAO',
-                                 'Criado em': 'DATA_ABERTURA',
-                                 'SLA - Data Prevista Solução': 'DATA_PREV_SOLUCAO',
-                                 }, inplace=True)
+    # Selecionar apenas colunas que existem no df_req_minha
+    required_cols_minha = ['Requisição de Serviço','Data Esperada', 'Resumo', 
+                           'Status', 'Proprietário', 'Cliente', 'Criado em', 
+                           'Resolvido em', 'SLA - Data Prevista Solução']
+    
+    available_cols_minha = [col for col in required_cols_minha if col in df_req_minha.columns]
+    df_req_minha = df_req_minha[available_cols_minha]
+    
+    # Renomear colunas apenas se existem
+    rename_dict = {}
+    if 'Requisição de Serviço' in df_req_minha.columns:
+        rename_dict['Requisição de Serviço'] = 'NUM_CHAMADO'
+    if 'Resumo' in df_req_minha.columns:
+        rename_dict['Resumo'] = 'TITULO'
+    if 'Proprietário' in df_req_minha.columns:
+        rename_dict['Proprietário'] = 'RESPONSAVEL'
+    if 'Cliente' in df_req_minha.columns:
+        rename_dict['Cliente'] = 'SOLICITANTE'
+    if 'Resolvido em' in df_req_minha.columns:
+        rename_dict['Resolvido em'] = 'DATA_RESOLUCAO'
+    if 'Criado em' in df_req_minha.columns:
+        rename_dict['Criado em'] = 'DATA_ABERTURA'
+    if 'SLA - Data Prevista Solução' in df_req_minha.columns:
+        rename_dict['SLA - Data Prevista Solução'] = 'DATA_PREV_SOLUCAO'
+    
+    df_req_minha.rename(columns=rename_dict, inplace=True)
     
     # Identificar colunas novas 
     colunas_df_req = set(df_req.columns)
     colunas_df_req_minha = set(df_req_minha.columns)
     colunas_novas = colunas_df_req_minha - colunas_df_req
     
-    # Fazer o merge 
-    colunas_para_merge = ['NUM_CHAMADO'] + list(colunas_novas)
-    df_req_minha_filtrado = df_req_minha[colunas_para_merge]
-    df_final = pd.merge(df_req, df_req_minha_filtrado, on='NUM_CHAMADO', how='left')
+    # Fazer o merge apenas se NUM_CHAMADO existe em ambos
+    if 'NUM_CHAMADO' in df_req.columns and 'NUM_CHAMADO' in df_req_minha.columns:
+        colunas_para_merge = ['NUM_CHAMADO'] + list(colunas_novas)
+        df_req_minha_filtrado = df_req_minha[colunas_para_merge]
+        df_final = pd.merge(df_req, df_req_minha_filtrado, on='NUM_CHAMADO', how='left')
+    else:
+        # Se não conseguir fazer merge, usar apenas df_req
+        df_final = df_req.copy()
     
     # Tratar colunas nulas
-    df_final['RESPONSAVEL'] = df_final['RESPONSAVEL'].fillna('Proprietário Vazio')
+    if 'RESPONSAVEL' in df_final.columns:
+        df_final['RESPONSAVEL'] = df_final['RESPONSAVEL'].fillna('Proprietário Vazio')
     
     # Criar DATA_ALVO 
-    df_final['DATA_ALVO'] = df_final['Data Esperada'].fillna(df_final['DATA_PREV_SOLUCAO'])
+    if 'Data Esperada' in df_final.columns and 'DATA_PREV_SOLUCAO' in df_final.columns:
+        df_final['DATA_ALVO'] = df_final['Data Esperada'].fillna(df_final['DATA_PREV_SOLUCAO'])
+    elif 'DATA_PREV_SOLUCAO' in df_final.columns:
+        df_final['DATA_ALVO'] = df_final['DATA_PREV_SOLUCAO']
+    elif 'Data Esperada' in df_final.columns:
+        df_final['DATA_ALVO'] = df_final['Data Esperada']
     
     # Aplicar padronização de colunas
     df_final = _apply_column_mapping(df_final)
@@ -258,7 +287,6 @@ def _show_data_management_sidebar():
 
 def _clear_data_cache():
     """Limpa cache de dados"""
-    import os
     if 'data_processed' in st.session_state:
         del st.session_state.data_processed
     
@@ -277,9 +305,10 @@ def _show_system_info(df, ano, semana, responsavel, status_filtrados):
     st.sidebar.caption(f"Última atualização: {datetime.now().strftime('%H:%M:%S')}")
     
     # Intervalo de datas dos dados
-    data_min = df['DATA_ALVO'].min().strftime('%d/%m/%Y')
-    data_max = df['DATA_ALVO'].max().strftime('%d/%m/%Y')
-    st.sidebar.caption(f"Período: {data_min} - {data_max}")
+    if 'DATA_ALVO' in df.columns and len(df) > 0:
+        data_min = df['DATA_ALVO'].min().strftime('%d/%m/%Y')
+        data_max = df['DATA_ALVO'].max().strftime('%d/%m/%Y')
+        st.sidebar.caption(f"Período: {data_min} - {data_max}")
     
     # Estatísticas dos filtros
     df_total = df[
