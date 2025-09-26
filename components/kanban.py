@@ -41,7 +41,11 @@ def _create_header(responsavel, is_current_week, semana, ano):
     else:
         st.subheader(f"{responsavel if responsavel != 'Todos' else 'Visão Geral da Equipe'}")
     
-    st.caption(f"Semana {semana}/{ano} - Chamados por Data Alvo (Resolvidos mostrados na data de resolução)")
+    # Ajustar descrição baseada na visualização
+    if responsavel == 'Todos':
+        st.caption(f"Semana {semana}/{ano} - Chamados por Data Alvo (Exibindo Responsável)")
+    else:
+        st.caption(f"Semana {semana}/{ano} - Chamados por Data Alvo (Resolvidos mostrados na data de resolução)")
 
 def _filter_data(df, ano, semana, responsavel, status_filtrados):
     """Filtra dados da semana selecionada"""
@@ -177,9 +181,9 @@ def _create_day_column(df_filtered, day_pt, date, ano, semana, responsavel, stat
     if total_dia == 0:
         st.info("Sem chamados")
     else:
-        _show_day_tickets(day_tickets, day_key, total_dia)
+        _show_day_tickets(day_tickets, day_key, total_dia, responsavel)
 
-def _show_day_tickets(day_tickets, day_key, total_dia):
+def _show_day_tickets(day_tickets, day_key, total_dia, responsavel):
     """Mostra tickets do dia com opção de expandir/recolher"""
     # Verificar se este dia está expandido
     is_expanded = st.session_state.expanded_days.get(day_key, False)
@@ -192,12 +196,12 @@ def _show_day_tickets(day_tickets, day_key, total_dia):
     
     # Mostrar tickets
     for idx, ticket in tickets_to_show.iterrows():
-        _create_ticket_card(ticket)
+        _create_ticket_card(ticket, responsavel)
     
     # Mostrar botões de expansão/recolhimento
     _show_expansion_buttons(total_dia, is_expanded, day_key)
 
-def _create_ticket_card(ticket):
+def _create_ticket_card(ticket, responsavel):
     """Cria card individual do ticket com animação de vibração"""
     # Determinar classe CSS baseada no status
     status_cat = ticket['STATUS_CATEGORIA'].lower()
@@ -218,15 +222,39 @@ def _create_ticket_card(ticket):
     if ticket['CONTADOR_DIAS']:
         contador_dias = f'({ticket["CONTADOR_DIAS"]})'
     
-    # Usar status padronizado apenas para exibição no card
-    status_display = get_display_status(ticket.get('STATUS', 'N/A'))
+    # NOVA LÓGICA: Decidir o que mostrar baseado na visualização
+    if responsavel == 'Todos':
+        # Na visualização "Todos", mostrar o responsável (primeiro e segundo nome)
+        display_info = _get_short_name(ticket.get('RESPONSAVEL', 'N/A'))
+        info_label = "Responsável"
+    else:
+        # Na visualização individual, mostrar o status
+        display_info = get_display_status(ticket.get('STATUS', 'N/A'))
+        info_label = "Status"
     
     st.markdown(f'''
         <div class="{all_classes}">
             <strong>#{ticket.get('REQUISICAO', 'N/A')} {ticket['STATUS_ICONE']}</strong><br>
-            <small><strong>Status:</strong> {status_display} {contador_dias}</small>
+            <small><strong>{info_label}:</strong> {display_info} {contador_dias}</small>
         </div>
     ''', unsafe_allow_html=True)
+
+def _get_short_name(full_name):
+    """Extrai o primeiro e segundo nome de um nome completo"""
+    if not full_name or full_name == 'N/A' or str(full_name).strip() == '':
+        return 'Sem Responsável'
+    
+    # Limpar e dividir o nome
+    name_parts = str(full_name).strip().split()
+    
+    if len(name_parts) == 0:
+        return 'Sem Responsável'
+    elif len(name_parts) == 1:
+        return name_parts[0]
+    elif len(name_parts) >= 2:
+        return f"{name_parts[0]} {name_parts[1]}"
+    else:
+        return str(full_name)[:20]  # Fallback: primeiros 20 caracteres
 
 def _show_expansion_buttons(total_dia, is_expanded, day_key):
     """Mostra botões de expansão/recolhimento se necessário"""

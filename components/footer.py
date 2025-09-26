@@ -3,7 +3,7 @@ import base64
 
 def create_footer():
     """Cria o rodapé da aplicação com logo"""
-    logo_path = "Grupo_Energisa.svg.png"
+    logo_path = "Grupo.svg.png"
     
     try:
         # Converter imagem para base64 para usar no HTML
@@ -12,8 +12,8 @@ def create_footer():
             
         st.markdown(f"""
         <div class="footer">
-            <img src="data:image/png;base64,{img_base64}" class="footer-logo" alt="Logo Energisa">
-            <p class="footer-text"> Desenvolvido por <strong>Júlia Alves Santos (83) 996502596</strong></p>
+            <img src="data:image/png;base64,{img_base64}" class="footer-logo" alt="Logo">
+            <p class="footer-text"> Desenvolvido por <strong>Júlia Alves Santos </strong></p>
         </div>
         """, unsafe_allow_html=True)
         
