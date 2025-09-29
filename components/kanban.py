@@ -48,12 +48,31 @@ def _create_header(responsavel, is_current_week, semana, ano):
         st.caption(f"Semana {semana}/{ano} - Chamados por Data Alvo (Resolvidos mostrados na data de resolução)")
 
 def _filter_data(df, ano, semana, responsavel, status_filtrados):
-    """Filtra dados da semana selecionada"""
-    df_filtered = df[
+    """Filtra dados da semana selecionada - INCLUINDO resolvidos na semana"""
+    
+    # PRIMEIRO: Filtrar por DATA_ALVO (lógica original)
+    df_data_alvo = df[
         (df['ANO_ALVO'] == ano) & 
         (df['SEMANA_ALVO'] == semana)
     ].copy()
     
+    # SEGUNDO: Adicionar chamados RESOLVIDOS/FECHADOS nesta semana (mesmo com DATA_ALVO diferente)
+    df_temp = df.copy()
+    df_temp['DATA_RESOLUCAO_VALIDA'] = pd.notna(df_temp['DATA_RESOLUCAO'])
+    df_temp['SEMANA_RESOLUCAO'] = df_temp['DATA_RESOLUCAO'].dt.isocalendar().week
+    df_temp['ANO_RESOLUCAO'] = df_temp['DATA_RESOLUCAO'].dt.year
+    
+    df_resolvidos_semana = df_temp[
+        (df_temp['STATUS'].isin(['Resolvido', 'Fechado'])) &
+        (df_temp['DATA_RESOLUCAO_VALIDA']) &
+        (df_temp['ANO_RESOLUCAO'] == ano) &
+        (df_temp['SEMANA_RESOLUCAO'] == semana)
+    ].copy()
+    
+    # TERCEIRO: Combinar os dois conjuntos (removendo duplicatas)
+    df_filtered = pd.concat([df_data_alvo, df_resolvidos_semana]).drop_duplicates(subset=['REQUISICAO'])
+    
+    # Aplicar filtros de responsável
     if responsavel != 'Todos':
         df_filtered = df_filtered[df_filtered['RESPONSAVEL'] == responsavel]
     
@@ -61,7 +80,7 @@ def _filter_data(df, ano, semana, responsavel, status_filtrados):
     if status_filtrados != 'Todos':
         df_filtered = df_filtered[df_filtered['STATUS'].isin(status_filtrados)]
     
-    # Aplicar lógica de data de exibição
+    # Aplicar lógica de data de exibição (mantém a lógica original)
     df_filtered['DATA_DISPLAY'] = df_filtered.apply(_get_display_date, axis=1)
     
     return df_filtered

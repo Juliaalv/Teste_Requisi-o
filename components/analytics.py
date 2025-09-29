@@ -15,7 +15,7 @@ def create_analytics(df, ano, semana, responsavel, status_filtrados):
         st.info("Nenhum dado para análise com os filtros selecionados.")
         return
     
-    # Criar abas para diferentes análises - NOVA ABA ADICIONADA
+    # Criar abas para diferentes análises
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["📈 Por Data Alvo", "🎯 Análise SLA", "👥 Por Responsável", "📊 Programados vs Extras", "📋 Lista Detalhada"])
     
     with tab1:
@@ -34,23 +34,41 @@ def create_analytics(df, ano, semana, responsavel, status_filtrados):
         _create_detailed_list(df_filtered)
 
 def _filter_analytics_data(df, ano, semana, responsavel, status_filtrados):
-    """Filtra dados para análise"""
-    df_filtered = df[
+    """Filtra dados para análise - MESMA LÓGICA DO KANBAN"""
+    
+    # PRIMEIRO: Filtrar por DATA_ALVO
+    df_data_alvo = df[
         (df['ANO_ALVO'] == ano) & 
         (df['SEMANA_ALVO'] == semana)
     ].copy()
     
+    # SEGUNDO: Adicionar chamados RESOLVIDOS/FECHADOS nesta semana
+    df_temp = df.copy()
+    df_temp['DATA_RESOLUCAO_VALIDA'] = pd.notna(df_temp['DATA_RESOLUCAO'])
+    df_temp['SEMANA_RESOLUCAO'] = df_temp['DATA_RESOLUCAO'].dt.isocalendar().week
+    df_temp['ANO_RESOLUCAO'] = df_temp['DATA_RESOLUCAO'].dt.year
+    
+    df_resolvidos_semana = df_temp[
+        (df_temp['STATUS'].isin(['Resolvido', 'Fechado'])) &
+        (df_temp['DATA_RESOLUCAO_VALIDA']) &
+        (df_temp['ANO_RESOLUCAO'] == ano) &
+        (df_temp['SEMANA_RESOLUCAO'] == semana)
+    ].copy()
+    
+    # TERCEIRO: Combinar removendo duplicatas
+    df_filtered = pd.concat([df_data_alvo, df_resolvidos_semana]).drop_duplicates(subset=['REQUISICAO'])
+    
+    # Aplicar filtros adicionais
     if responsavel != 'Todos':
         df_filtered = df_filtered[df_filtered['RESPONSAVEL'] == responsavel]
     
-    # Aplicar filtro de status
     if status_filtrados != 'Todos':
         df_filtered = df_filtered[df_filtered['STATUS'].isin(status_filtrados)]
     
     return df_filtered
 
 def _create_data_alvo_analysis(df_filtered, ano, semana):
-    """Cria análise por data alvo - ATUALIZADA"""
+    """Cria análise por data alvo"""
     col1, col2 = st.columns(2)
     
     with col1:
@@ -63,8 +81,7 @@ def _create_data_alvo_analysis(df_filtered, ano, semana):
     _create_summary_table(df_filtered, ano, semana)
 
 def _create_stacked_bar_chart(df_filtered, ano, semana):
-    """Cria gráfico de barras empilhadas - COMPLETAMENTE ATUALIZADA"""
-    # APLICAR A LÓGICA get_display_date para o gráfico empilhado
+    """Cria gráfico de barras empilhadas"""
     def get_display_date_analytics(row):
         """Mesma lógica do get_display_date do Kanban"""
         status_clean = str(row.get('STATUS', '')).strip()
@@ -84,7 +101,7 @@ def _create_stacked_bar_chart(df_filtered, ano, semana):
     # Filtrar apenas chamados que aparecem na semana do Kanban
     df_kanban_visible = df_analytics[df_analytics['DATA_DISPLAY'].isin(week_dates)]
     
-    # Gráfico de barras empilhadas por DATA_DISPLAY (não mais DATA_ALVO_DATE)
+    # Gráfico de barras empilhadas por DATA_DISPLAY
     if len(df_kanban_visible) > 0:
         grouped_data = df_kanban_visible.groupby(['DATA_DISPLAY', 'STATUS']).size().reset_index(name='Quantidade')
         
@@ -114,7 +131,7 @@ def _create_stacked_bar_chart(df_filtered, ano, semana):
         st.info("Não há dados suficientes para o gráfico empilhado.")
 
 def _create_status_pie_chart(df_filtered, ano, semana):
-    """Cria gráfico pizza de distribuição por status - TÍTULO ATUALIZADO"""
+    """Cria gráfico pizza de distribuição por status"""
     # Aplicar mesma lógica para consistência
     df_analytics = df_filtered.copy()
     df_analytics['DATA_DISPLAY'] = df_analytics.apply(lambda row: row['DATA_RESOLUCAO'].date() 
@@ -139,7 +156,7 @@ def _create_status_pie_chart(df_filtered, ano, semana):
         st.info("Não há dados para o gráfico de distribuição.")
 
 def _create_summary_table(df_filtered, ano, semana):
-    """Cria tabela resumo por data e status - TÍTULO E LÓGICA ATUALIZADOS"""
+    """Cria tabela resumo por data e status"""
     st.subheader(f"Resumo dos Chamados Visíveis no Kanban - Semana {semana}/{ano}")
     
     # Aplicar mesma lógica para consistência
@@ -165,7 +182,7 @@ def _create_summary_table(df_filtered, ano, semana):
         st.info("Nenhum chamado visível no Kanban para esta semana.")
 
 def _create_sla_analysis(df_filtered, responsavel, status_filtrados, df):
-    """Cria análise de SLA - ATUALIZADA"""
+    """Cria análise de SLA"""
     col1, col2 = st.columns(2)
     
     with col1:
@@ -175,7 +192,7 @@ def _create_sla_analysis(df_filtered, responsavel, status_filtrados, df):
         _create_sla_weekly_chart(df_filtered, responsavel, status_filtrados, df)
 
 def _create_sla_pie_chart(df_filtered):
-    """Cria gráfico pizza do status SLA - TÍTULO ATUALIZADO"""
+    """Cria gráfico pizza do status SLA"""
     # Status do SLA - APENAS RESOLVIDOS/FECHADOS
     df_sla_elegivel = df_filtered[df_filtered['STATUS'].isin(['Resolvido', 'Fechado'])]
     
@@ -194,7 +211,7 @@ def _create_sla_pie_chart(df_filtered):
         st.info("Nenhum chamado resolvido/fechado encontrado para análise de SLA.")
 
 def _create_sla_weekly_chart(df_filtered, responsavel, status_filtrados, df):
-    """Cria gráfico de taxa SLA por semana - ATUALIZADA"""
+    """Cria gráfico de taxa SLA por semana"""
     # Chamados por semana - APENAS RESOLVIDOS/FECHADOS
     df_sla_weekly = df[df['STATUS'].isin(['Resolvido', 'Fechado'])]
     
@@ -243,7 +260,7 @@ def _create_responsavel_analysis(df_filtered, responsavel):
         st.info("Análise de backlog disponível apenas na visão 'Todos'.")
 
 def _create_programados_extras_analysis(df_filtered, ano, semana):
-    """NOVA FUNÇÃO - Análise de programados vs extras com lógica refinada"""
+    """Análise de programados vs extras com lógica refinada"""
     st.caption("Compara chamados programados vs extras (baseado na lógica de resolução).")
 
     week_dates = get_week_dates(ano, semana)
@@ -258,12 +275,12 @@ def _create_programados_extras_analysis(df_filtered, ano, semana):
             day_name = days_pt[i]
             day_label = f"{day_name}\n{date.strftime('%d/%m')}"
             
-            # PROGRAMADOS: Chamados resolvidos/fechados onde DATA_RESOLUCAO = DATA_ALVO (programados originalmente para este dia)
+            # PROGRAMADOS: Chamados resolvidos/fechados onde DATA_RESOLUCAO = DATA_ALVO
             programados_df = df_filtered[
                 (df_filtered['STATUS'].isin(['Resolvido', 'Fechado'])) &
                 (df_filtered['DATA_RESOLUCAO'].notna()) &
                 (df_filtered['DATA_RESOLUCAO'].dt.date == date) &
-                (df_filtered['DATA_ALVO_DATE'] == date)  # MESMA DATA ALVO E RESOLUÇÃO
+                (df_filtered['DATA_ALVO_DATE'] == date)
             ]
             qtd_programados = len(programados_df)
 
@@ -272,7 +289,7 @@ def _create_programados_extras_analysis(df_filtered, ano, semana):
                 (df_filtered['STATUS'].isin(['Resolvido', 'Fechado'])) &
                 (df_filtered['DATA_RESOLUCAO'].notna()) &
                 (df_filtered['DATA_RESOLUCAO'].dt.date == date) &
-                (df_filtered['DATA_ALVO_DATE'] != date)  # DATA ALVO DIFERENTE DA RESOLUÇÃO
+                (df_filtered['DATA_ALVO_DATE'] != date)
             ]
             qtd_extras = len(extras_df)
             
@@ -317,7 +334,6 @@ def _create_programados_extras_analysis(df_filtered, ano, semana):
                 hovermode='x unified'
             )
             
-            # Melhorar hover
             fig.update_traces(
                 hovertemplate='<b>%{fullData.name}</b><br>%{x}<br>Quantidade: %{y}<extra></extra>'
             )
@@ -327,25 +343,25 @@ def _create_programados_extras_analysis(df_filtered, ano, semana):
     with col2:
         st.subheader("Resumo por Dia")
         
-        # Criar tabela resumo com a nova lógica
+        # Criar tabela resumo
         resumo_data = []
         for i, date in enumerate(week_dates):
             day_name = days_pt[i]
             
-            # Programados: resolvidos na data certa (data resolução = data alvo)
+            # Programados
             programados_count = len(df_filtered[
                 (df_filtered['STATUS'].isin(['Resolvido', 'Fechado'])) &
                 (df_filtered['DATA_RESOLUCAO'].notna()) &
                 (df_filtered['DATA_RESOLUCAO'].dt.date == date) &
-                (df_filtered['DATA_ALVO_DATE'] == date)  # MESMA DATA
+                (df_filtered['DATA_ALVO_DATE'] == date)
             ])
 
-            # Extras: resolvidos neste dia mas programados para outro
+            # Extras
             extras_count = len(df_filtered[
                 (df_filtered['STATUS'].isin(['Resolvido', 'Fechado'])) &
                 (df_filtered['DATA_RESOLUCAO'].notna()) &
                 (df_filtered['DATA_RESOLUCAO'].dt.date == date) &
-                (df_filtered['DATA_ALVO_DATE'] != date)  # DATA DIFERENTE
+                (df_filtered['DATA_ALVO_DATE'] != date)
             ])
 
             if programados_count > 0 or extras_count > 0:
