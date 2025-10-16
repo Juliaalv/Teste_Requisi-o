@@ -20,16 +20,30 @@ def create_sidebar_filters(df):
     
     df_ano = df[df['ANO_ALVO'] == ano_selecionado]
     semanas = sorted(df_ano['SEMANA_ALVO'].dropna().unique().tolist())
-    if not semanas:
-        return ano_selecionado, None, None, None
-        
+   # Definir limites e valor inicial
+    min_semana = min(semanas)
+    max_semana = max(semanas)
+    
     # Destacar semana atual se estiver disponível
     if ano_selecionado == ano_atual and semana_atual in semanas:
-        idx_atual = semanas.index(semana_atual)
+        valor_inicial = semana_atual
     else:
-        idx_atual = len(semanas) - 1
-        
-    semana_selecionada = st.sidebar.selectbox("Semana:", semanas, index=idx_atual)
+        # Se a semana atual não estiver disponível, usar a última semana do ano selecionado
+        valor_inicial = max_semana
+
+    # 2. Filtro da Semana (Mudado para number_input com setas)
+    # Usamos o `value` para definir o valor inicial e `min_value`/`max_value` para limites
+    semana_selecionada = st.sidebar.number_input(
+        "Semana:", 
+        min_value=min_semana, 
+        max_value=max_semana, 
+        value=valor_inicial,
+        step=1, # O passo é 1 para mudar de semana em semana
+        key='filtro_semana_number_input'
+    )
+    
+    # Nota: number_input retorna um float se não for explicitamente forçado
+    semana_selecionada = int(semana_selecionada) if semana_selecionada is not None else valor_inicial
     
     # Filtro de responsável
     responsavel_selecionado = _create_responsavel_filter(df)
