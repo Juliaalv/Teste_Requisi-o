@@ -38,15 +38,13 @@ def create_sidebar_filters(df):
         min_value=min_semana, 
         max_value=max_semana, 
         value=valor_inicial,
-        step=1, # O passo é 1 para mudar de semana em semana
+        step=1,
         key='filtro_semana_number_input'
     )
-    
-    # Nota: number_input retorna um float se não for explicitamente forçado
     semana_selecionada = int(semana_selecionada) if semana_selecionada is not None else valor_inicial
     
     # Filtro de responsável
-    responsavel_selecionado = _create_responsavel_filter(df)
+    responsavel_selecionado = _create_responsavel_filter(df) 
     
     # Filtro de status
     status_selecionados = _create_status_filter(df)
