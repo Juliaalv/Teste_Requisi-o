@@ -23,6 +23,7 @@ def create_analytics(df, ano, semana, responsavel, status_filtrados):
     
     with tab2:
         _create_sla_analysis(df_filtered, responsavel, status_filtrados, df)
+        _create_sla_violated_table(df_filtered)
     
     with tab3:
         _create_responsavel_analysis(df_filtered, responsavel)
@@ -242,6 +243,43 @@ def _create_sla_weekly_chart(df_filtered, responsavel, status_filtrados, df):
         st.plotly_chart(fig, use_container_width=True, key="chart_sla_weekly_1")
     else:
         st.info("Dados insuficientes para análise temporal de SLA.")
+
+def _create_sla_violated_table(df_filtered):
+    """Cria tabela com chamados que violaram o SLA (SLA_VIOLADO == True)."""
+    
+    # 1. Filtrar pelos chamados Resolvidos/Fechados E com SLA Violado (True)
+    df_violado = df_filtered[
+        df_filtered['STATUS'].isin(['Resolvido', 'Fechado']) & 
+        (df_filtered['SLA_VIOLADO'] == True)
+    ].copy()
+    
+    # Colunas que queremos exibir na tabela
+    display_cols = [
+        'REQUISICAO', 
+        'DATA_ALVO', 
+        'DATA_RESOLUCAO', # Assumindo que esta coluna existe para mostrar o desvio
+        'RESUMO', 
+        'RESPONSAVEL'
+    ]
+    
+    # Verificar quais colunas estão realmente disponíveis no DataFrame
+    available_cols = [col for col in display_cols if col in df_violado.columns]
+    
+    if len(df_violado) > 0:
+        st.subheader(f"⚠️ Chamados com SLA Violado ({len(df_violado)})")
+        
+        # Opcional: Ordenar pela data alvo ou data de resolução
+        if 'DATA_ALVO' in df_violado.columns:
+            df_violado = df_violado.sort_values('DATA_ALVO', ascending=True)
+            
+        # Exibir a tabela
+        st.dataframe(
+            df_violado[available_cols], 
+            use_container_width=True, 
+            hide_index=True
+        )
+    else:
+        st.success("🎉 Não há chamados resolvidos/fechados que violaram o SLA no período/filtros selecionados.")
 
 def _create_responsavel_analysis(df_filtered, responsavel):
     """Cria análise por responsável"""
@@ -476,19 +514,51 @@ def _create_responsavel_table(df_filtered):
     df_consolidado = df_consolidado.sort_values('Backlog Ativo', ascending=False)
     
     st.dataframe(df_consolidado, use_container_width=True, hide_index=True)
-
+    
 def _create_detailed_list(df_filtered):
-    """Cria lista detalhada de chamados"""
+    """
+    Cria lista detalhada de chamados, com opção de alternar entre 100 e tudo.
+    O botão de exportar foi removido.
+    """
     display_cols = ['REQUISICAO', 'DATA_ALVO', 'STATUS', 'RESUMO', 'RESPONSAVEL', 'SLA_VIOLADO']
     available_cols = [col for col in display_cols if col in df_filtered.columns]
     
-    # Ordenar por data alvo
+    # 1. Preparar o DataFrame completo
     df_display = df_filtered.sort_values('DATA_ALVO', ascending=False)
+    df_visual = df_display[available_cols] # DataFrame para visualização
+    total_chamados = len(df_display)
     
-    st.dataframe(df_display[available_cols].head(100), use_container_width=True, hide_index=True)
-    
-    if len(df_display) > 100:
-        st.caption(f"Mostrando 100 de {len(df_display)} chamados")
+    # --- Controles (Apenas o Checkbox e Legenda) ---
+    if total_chamados > 0:
+        
+        # Criar colunas para alinhar o checkbox e a legenda
+        col1, col2 = st.columns([1, 4]) 
+        
+        # COLUNA 1: Checkbox para Mostrar Tudo
+        mostrar_tudo = False
+        if total_chamados > 100:
+            with col1:
+                mostrar_tudo = st.checkbox("Mostrar Tudo", key="mostrar_tudo_checkbox")
+        
+        # 2. Aplicar o limite se 'Mostrar Tudo' não estiver marcado
+        df_to_show = df_visual.copy()
+        
+        # COLUNA 2: Legenda
+        with col2:
+            if not mostrar_tudo and total_chamados > 100:
+                df_to_show = df_to_show.head(100)
+                st.caption(f"Mostrando 100 de {total_chamados} chamados.")
+            elif mostrar_tudo:
+                st.caption(f"Mostrando todos os {total_chamados} chamados.")
+            elif total_chamados <= 100:
+                 st.caption(f"Mostrando todos os {total_chamados} chamados.") # Se <= 100, mostra todos por padrão
+
+        # 3. Exibir o DataFrame (limitado ou completo)
+        st.dataframe(df_to_show, use_container_width=True, hide_index=True)
+        
+    elif total_chamados == 0:
+         st.info("Nenhum chamado encontrado com os filtros aplicados.")
+
 
 def _get_status_colors():
     """Retorna mapeamento de cores para status"""
