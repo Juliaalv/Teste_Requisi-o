@@ -1,3 +1,4 @@
+import pandas as pd
 import streamlit as st
 from datetime import datetime
 
@@ -48,6 +49,9 @@ def create_sidebar_filters(df):
     
     # Filtro de status
     status_selecionados = _create_status_filter(df)
+    
+    # Filtro de requisição (busca)
+    _create_requisicao_filter(df)
     
     # Mostrar resumo dos filtros aplicados
     _show_filter_summary(ano_selecionado, semana_selecionada, responsavel_selecionado, status_selecionados, df)
@@ -104,6 +108,76 @@ def _create_status_filter(df):
         return 'Todos'
     else:
         return [status_display_map[display] for display in status_selecionados_display]
+
+
+def _create_requisicao_filter(df):
+    """Cria filtro de busca por número de requisição com informações detalhadas"""
+    st.sidebar.subheader("🔍 Buscar Requisição")
+    
+    # Input de busca
+    numero_requisicao = st.sidebar.text_input(
+        "Digite o número da requisição:",
+        placeholder="Ex: 123456",
+        help="Digite o número do chamado para ver todos os detalhes"
+    )
+    
+    if numero_requisicao.strip():
+        # Filtrar pela requisição
+        df_requisicao = df[df['REQUISICAO'].astype(str).str.contains(numero_requisicao.strip(), case=False, na=False)]
+        
+        if len(df_requisicao) > 0:
+            st.sidebar.success(f"✅ {len(df_requisicao)} requisição encontrada")
+            
+            # Mostrar detalhes de cada requisição encontrada
+            for idx, row in df_requisicao.iterrows():
+                with st.sidebar.expander(f"#{row['REQUISICAO']} - {row['STATUS']}", expanded=True):
+                    st.write(f"**Status:** {row['STATUS']}")
+                    st.write(f"**Responsável:** {row.get('RESPONSAVEL', 'N/A')}")
+                    st.write(f"**Solicitante:** {row.get('SOLICITANTE', 'N/A')}")
+                    st.write(f"**Resumo:** {row.get('RESUMO', row.get('TITULO', 'N/A'))}")
+                    st.write(f"**Empresa:** {row.get('EMPRESA_SOLICITANTE', 'N/A')}")
+                    st.write(f"**Cliente:** {row.get('CLIENTE_CIDADE', 'N/A')}")
+                    st.write(f"**UF:** {row.get('CLIENTE_UF', 'N/A')}")
+                    
+                    st.write("---")
+                    st.write("**📅 Datas:**")
+                    
+                    if pd.notna(row.get('DATA_ABERTURA')):
+                        st.write(f"  • **Abertura:** {row['DATA_ABERTURA'].strftime('%d/%m/%Y')}")
+                    else:
+                        st.write(f"  • **Abertura:** N/A")
+                    
+                    if pd.notna(row.get('DATA_PREV_SOLUCAO')):
+                        st.write(f"  • **Prev. Solução:** {row['DATA_PREV_SOLUCAO'].strftime('%d/%m/%Y')}")
+                    else:
+                        st.write(f"  • **Prev. Solução:** N/A")
+                    
+                    if pd.notna(row.get('DATA_ALVO')):
+                        st.write(f"  • **Data Alvo:** {row['DATA_ALVO'].strftime('%d/%m/%Y')}")
+                    else:
+                        st.write(f"  • **Data Alvo:** N/A")
+                    
+                    if pd.notna(row.get('Data Esperada')):
+                        st.write(f"  • **Data Esperada:** {row['Data Esperada'].strftime('%d/%m/%Y')}")
+                    else:
+                        st.write(f"  • **Data Esperada:** N/A")
+                    
+                    if pd.notna(row.get('DATA_RESOLUCAO')):
+                        st.write(f"  • **Resolução:** {row['DATA_RESOLUCAO'].strftime('%d/%m/%Y')}")
+                    else:
+                        st.write(f"  • **Resolução:** N/A")
+                    
+                    if pd.notna(row.get('DATA_FECHAMENTO')):
+                        st.write(f"  • **Fechamento:** {row['DATA_FECHAMENTO'].strftime('%d/%m/%Y')}")
+                    else:
+                        st.write(f"  • **Fechamento:** N/A")
+                    
+                    st.write("---")
+                    sla_status = "🚨 Violado" if row.get('SLA_VIOLADO') else "✅ Ok"
+                    st.write(f"**SLA:** {sla_status}")
+        else:
+            st.sidebar.warning(f"⚠️ Nenhuma requisição encontrada com '{numero_requisicao}'")
+
 
 def _show_filter_summary(ano, semana, responsavel, status_selecionados, df):
     """Mostra resumo dos filtros aplicados"""

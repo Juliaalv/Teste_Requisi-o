@@ -16,7 +16,7 @@ def main():
     configure_page()
     
     # Título principal
-    st.markdown('<h1 class="main-header">📊 Análise Semanal dos Chamados</h1>', 
+    st.markdown('<h1 class="main-header"> Análise Semanal dos Chamados</h1>', 
                unsafe_allow_html=True)
     
     # Container principal com margem para o rodapé
@@ -192,7 +192,8 @@ def _process_data_original_logic(df_req, df_req_minha):
     # Selecionar apenas colunas que existem no df_req
     required_cols_req = ['NUM_CHAMADO', 'DATA_ABERTURA', 'DATA_PREV_SOLUCAO',
                          'DATA_QUEBRA_SLA', 'SLA_VIOLADO', 'DATA_RESOLUCAO',
-                         'DATA_FECHAMENTO', 'Status', 'TITULO', 'SOLICITANTE', 'RESPONSAVEL']
+                         'DATA_FECHAMENTO', 'Status', 'TITULO', 'SOLICITANTE', 'RESPONSAVEL',
+                         'EMPRESA_SOLICITANTE', 'CLIENTE_CIDADE', 'CLIENTE_UF']
     
     available_cols_req = [col for col in required_cols_req if col in df_req.columns]
     df_req = df_req[available_cols_req]
@@ -259,14 +260,8 @@ def _apply_column_mapping(df):
     """Aplica mapeamento de colunas para padronizar nomes"""
     column_mapping = {
         'NUM_CHAMADO': 'REQUISICAO',
-        'DATA_ABERTURA': 'DATA_ABERTURA',
-        'DATA_ALVO': 'DATA_ALVO', 
-        'SLA_VIOLADO': 'SLA_VIOLADO',
-        'DATA_RESOLUCAO': 'DATA_RESOLUCAO',
         'Status': 'STATUS',
-        'RESPONSAVEL': 'RESPONSAVEL',
         'TITULO': 'RESUMO',
-        'SOLICITANTE': 'SOLICITANTE'
     }
     
     # Aplicar mapeamento apenas para colunas existentes

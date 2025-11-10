@@ -16,7 +16,7 @@ def create_analytics(df, ano, semana, responsavel, status_filtrados):
         return
     
     # Criar abas para diferentes análises
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📈 Por Data Alvo", "🎯 Análise SLA", "👥 Por Responsável", "📊 Programados vs Extras", "📋 Lista Detalhada"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📈 Por Data Alvo", "🎯 Análise SLA", "👥 Por Responsável", "📊 Programados vs Extras", "📋 Lista Detalhada", "📑 Resumo Detalhado"])
     
     with tab1:
         _create_data_alvo_analysis(df_filtered, ano, semana)
@@ -33,6 +33,9 @@ def create_analytics(df, ano, semana, responsavel, status_filtrados):
     
     with tab5:
         _create_detailed_list(df_filtered)
+    
+    with tab6:
+        _create_resumo_detalhado(df_filtered)
 
 def _filter_analytics_data(df, ano, semana, responsavel, status_filtrados):
     """Filtra dados para análise - MESMA LÓGICA DO KANBAN"""
@@ -558,6 +561,238 @@ def _create_detailed_list(df_filtered):
         
     elif total_chamados == 0:
          st.info("Nenhum chamado encontrado com os filtros aplicados.")
+
+
+
+
+def _create_resumo_detalhado(df_filtered):
+    """Cria resumo detalhado com distribuição por resumo, status e empresa"""
+    
+  
+    
+    # LINHA 1: Gráfico Empresa | Gráfico Status
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("####  Distribuição por Empresa")
+        _create_empresa_chart(df_filtered)
+    
+    with col2:
+        st.markdown("####  Distribuição por Status")
+        _create_status_chart(df_filtered)
+    
+    st.markdown("---")
+    
+    # LINHA 2: Tabela Empresa | Tabela Resumo
+    col3, col4 = st.columns(2)
+    
+    with col3:
+
+        _create_empresa_table(df_filtered)
+    
+    with col4:
+     
+        _create_resumo_distribution(df_filtered)
+    
+    st.markdown("---")
+    
+    # LINHA 3: Tabela Status (ocupando 2 colunas)
+    st.markdown("#### 📊 Distribuição por Status")
+    _create_status_table(df_filtered)
+
+
+def _create_resumo_distribution(df_filtered):
+    """Cria distribuição de resumos com previstos vs realizados"""
+    
+    if 'RESUMO' not in df_filtered.columns:
+        st.info("Coluna 'RESUMO' não encontrada")
+        return
+    
+    # Criar tabela resumida
+    resumo_stats = []
+    
+    for resumo in df_filtered['RESUMO'].dropna().unique():
+        df_resumo = df_filtered[df_filtered['RESUMO'] == resumo]
+        
+        # Contar previstos (DATA_ALVO da semana)
+        previstos = len(df_resumo)
+        
+        # Contar realizados (STATUS = Resolvido ou Fechado)
+        realizados = len(df_resumo[df_resumo['STATUS'].isin(['Resolvido', 'Fechado'])])
+        
+        percentual = (realizados / previstos * 100) if previstos > 0 else 0
+        
+        resumo_stats.append({
+            'Tipo de Resumo': resumo,
+            'Previstos': int(previstos),
+            'Realizados': int(realizados),
+            'Pendentes': int(previstos - realizados),
+            '% Conclusão': round(percentual, 1)
+        })
+    
+    df_resumo_stats = pd.DataFrame(resumo_stats).sort_values('Previstos', ascending=False)
+    
+    # Adicionar total
+    total_previstos = int(df_resumo_stats['Previstos'].sum())
+    total_realizados = int(df_resumo_stats['Realizados'].sum())
+    total_pendentes = int(df_resumo_stats['Pendentes'].sum())
+    total_percentual = (total_realizados / total_previstos * 100) if total_previstos > 0 else 0
+    
+    total_row = {
+        'Tipo de Resumo': '🔹 TOTAL',
+        'Previstos': total_previstos,
+        'Realizados': total_realizados,
+        'Pendentes': total_pendentes,
+        '% Conclusão': round(total_percentual, 1)
+    }
+    
+    df_resumo_stats = pd.concat([df_resumo_stats, pd.DataFrame([total_row])], ignore_index=True)
+    
+    st.dataframe(df_resumo_stats, use_container_width=True, hide_index=True)
+
+
+def _create_empresa_distribution(df_filtered):
+    """Cria distribuição de chamados por empresa"""
+    
+    if 'EMPRESA_SOLICITANTE' not in df_filtered.columns:
+        st.info("Coluna 'EMPRESA_SOLICITANTE' não encontrada")
+        return
+    
+    # Contar por empresa
+    empresa_counts = df_filtered['EMPRESA_SOLICITANTE'].dropna().value_counts()
+    
+    if len(empresa_counts) == 0:
+        st.info("Nenhum dado de empresa disponível")
+        return
+    
+    # Criar gráfico
+    fig_empresa = px.pie(
+        values=empresa_counts.values,
+        names=empresa_counts.index,
+        title="Distribuição de Chamados por Empresa",
+        hole=0.3
+    )
+    
+    fig_empresa.update_layout(height=400)
+    st.plotly_chart(fig_empresa, use_container_width=True, key="chart_empresa_dist")
+    
+    # Tabela com números
+    quantidade_list = [int(x) for x in empresa_counts.values]
+    total_empresa = sum(quantidade_list)
+    percentual_list = [round((x / total_empresa * 100), 1) for x in quantidade_list]
+    
+    df_empresa_table = pd.DataFrame({
+        'Empresa': empresa_counts.index,
+        'Quantidade': quantidade_list,
+        '% Total': percentual_list
+    })
+    
+    st.dataframe(df_empresa_table, use_container_width=True, hide_index=True)
+
+
+def _create_empresa_chart(df_filtered):
+    """Cria apenas o gráfico de distribuição por empresa"""
+    
+    if 'EMPRESA_SOLICITANTE' not in df_filtered.columns:
+        st.info("Coluna 'EMPRESA_SOLICITANTE' não encontrada")
+        return
+    
+    # Contar por empresa
+    empresa_counts = df_filtered['EMPRESA_SOLICITANTE'].dropna().value_counts()
+    
+    if len(empresa_counts) == 0:
+        st.info("Nenhum dado de empresa disponível")
+        return
+    
+    # Criar gráfico
+    fig_empresa = px.pie(
+        values=empresa_counts.values,
+        names=empresa_counts.index,
+        hole=0.3
+    )
+    
+    fig_empresa.update_layout(height=400)
+    st.plotly_chart(fig_empresa, use_container_width=True, key="chart_empresa_dist_linha1")
+
+
+def _create_empresa_table(df_filtered):
+    """Cria apenas a tabela de distribuição por empresa"""
+    
+    if 'EMPRESA_SOLICITANTE' not in df_filtered.columns:
+        st.info("Coluna 'EMPRESA_SOLICITANTE' não encontrada")
+        return
+    
+    # Contar por empresa
+    empresa_counts = df_filtered['EMPRESA_SOLICITANTE'].dropna().value_counts()
+    
+    if len(empresa_counts) == 0:
+        st.info("Nenhum dado de empresa disponível")
+        return
+    
+    # Tabela com números
+    quantidade_list = [int(x) for x in empresa_counts.values]
+    total_empresa = sum(quantidade_list)
+    percentual_list = [round((x / total_empresa * 100), 1) for x in quantidade_list]
+    
+    df_empresa_table = pd.DataFrame({
+        'Empresa': empresa_counts.index,
+        'Quantidade': quantidade_list,
+        '% Total': percentual_list
+    })
+    
+    st.dataframe(df_empresa_table, use_container_width=True, hide_index=True)
+
+
+
+def _create_status_table(df_filtered):
+    """Cria tabela de distribuição por status"""
+    
+    status_counts = df_filtered['STATUS'].value_counts()
+    
+    quantidade_list = [int(x) for x in status_counts.values]
+    total_status = sum(quantidade_list)
+    percentual_list = [round((x / total_status * 100), 1) for x in quantidade_list]
+    
+    df_status = pd.DataFrame({
+        'Status': status_counts.index,
+        'Quantidade': quantidade_list,
+        '% Total': percentual_list
+    }).sort_values('Quantidade', ascending=False)
+    
+    # Adicionar total
+    total_row = {
+        'Status': '🔹 TOTAL',
+        'Quantidade': int(total_status),
+        '% Total': 100.0
+    }
+    
+    df_status = pd.concat([df_status, pd.DataFrame([total_row])], ignore_index=True)
+    
+    st.dataframe(df_status, use_container_width=True, hide_index=True)
+
+
+def _create_status_chart(df_filtered):
+    """Cria gráfico de distribuição por status"""
+    
+    status_counts = df_filtered['STATUS'].value_counts()
+    
+    fig_status = px.bar(
+        x=status_counts.values,
+        y=status_counts.index,
+        orientation='h',
+        color=status_counts.index,
+        color_discrete_map=_get_status_colors(),
+        labels={'x': 'Quantidade', 'y': 'Status'}
+    )
+    
+    fig_status.update_layout(
+        height=max(300, len(status_counts) * 30),
+        showlegend=False,
+        title='',
+    
+    )
+    
+    st.plotly_chart(fig_status, use_container_width=True, key="chart_status_bars_linha1")
 
 
 def _get_status_colors():
