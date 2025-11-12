@@ -44,6 +44,22 @@ def prepare_data_with_real_status(df):
     # Filtrar apenas registros com DATA_ALVO válida
     df = df[df['DATA_ALVO'].notna()].copy()
     
+    # NOVA LÓGICA: Se Data Esperada existe e passou da Data Esperada, usar DATA_PREV_SOLUCAO como DATA_ALVO
+    hoje = datetime.now().date()
+    if 'Data Esperada' in df.columns:
+        df['Data Esperada'] = pd.to_datetime(df['Data Esperada'], errors='coerce')
+        
+        # Se passou da Data Esperada, usar DATA_PREV_SOLUCAO
+        def ajustar_data_alvo(row):
+            if pd.notna(row.get('Data Esperada')):
+                data_esperada = row['Data Esperada'].date()
+                # Se hoje é depois da data esperada, retornar DATA_PREV_SOLUCAO
+                if hoje > data_esperada and pd.notna(row.get('DATA_PREV_SOLUCAO')):
+                    return row['DATA_PREV_SOLUCAO']
+            return row['DATA_ALVO']
+        
+        df['DATA_ALVO'] = df.apply(ajustar_data_alvo, axis=1)
+    
     # Criar colunas auxiliares baseadas na DATA_ALVO
     df['DATA_ALVO_DATE'] = df['DATA_ALVO'].dt.date
     df['SEMANA_ALVO'] = df['DATA_ALVO'].dt.isocalendar().week
