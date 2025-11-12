@@ -16,7 +16,7 @@ def main():
     configure_page()
     
     # Título principal
-    st.markdown('<h1 class="main-header"> Análise Semanal dos Chamados</h1>', 
+    st.markdown('<h1 class="main-header">📊 Análise Semanal dos Chamados</h1>', 
                unsafe_allow_html=True)
     
     # Container principal com margem para o rodapé
@@ -243,9 +243,29 @@ def _process_data_original_logic(df_req, df_req_minha):
     if 'RESPONSAVEL' in df_final.columns:
         df_final['RESPONSAVEL'] = df_final['RESPONSAVEL'].fillna('Proprietário Vazio')
     
-    # Criar DATA_ALVO 
+    # Criar DATA_ALVO com nova lógica: se passou da Data Esperada, usar DATA_PREV_SOLUCAO
+    from datetime import datetime
+    hoje = datetime.now().date()
+    
     if 'Data Esperada' in df_final.columns and 'DATA_PREV_SOLUCAO' in df_final.columns:
-        df_final['DATA_ALVO'] = df_final['Data Esperada'].fillna(df_final['DATA_PREV_SOLUCAO'])
+        # Converter para datetime se necessário
+        df_final['Data Esperada'] = pd.to_datetime(df_final['Data Esperada'], errors='coerce')
+        
+        # Lógica: se hoje > Data Esperada, usar DATA_PREV_SOLUCAO, senão usar Data Esperada
+        def get_data_alvo(row):
+            data_esp = row.get('Data Esperada')
+            data_prev = row.get('DATA_PREV_SOLUCAO')
+            
+            if pd.notna(data_esp):
+                # Se passou da Data Esperada, retorna DATA_PREV_SOLUCAO
+                if hoje > data_esp.date() and pd.notna(data_prev):
+                    return data_prev
+                return data_esp
+            elif pd.notna(data_prev):
+                return data_prev
+            return None
+        
+        df_final['DATA_ALVO'] = df_final.apply(get_data_alvo, axis=1)
     elif 'DATA_PREV_SOLUCAO' in df_final.columns:
         df_final['DATA_ALVO'] = df_final['DATA_PREV_SOLUCAO']
     elif 'Data Esperada' in df_final.columns:
