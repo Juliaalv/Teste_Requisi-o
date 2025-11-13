@@ -67,9 +67,11 @@ def _create_responsavel_filter(df):
 def _create_status_filter(df):
     """Cria filtro de status com ícones"""
     st.sidebar.subheader("📊 Status dos Chamados")
-    
+
+    status_excluidos = ['Pendente Aprovação']
     # Obter todos os status únicos
-    status_unicos = sorted(df['STATUS'].dropna().unique().tolist())
+    status_unicos = sorted([s for s in df['STATUS'].dropna().unique().tolist() 
+                           if s not in status_excluidos])
     
     # Criar um mapeamento de status com ícones para melhor visualização
     status_mapping = {
