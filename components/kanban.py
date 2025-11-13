@@ -69,6 +69,7 @@ def _filter_data(df, ano, semana, responsavel, status_filtrados):
         (df_temp['SEMANA_RESOLUCAO'] == semana)
     ].copy()
     
+   
     # TERCEIRO: Combinar os dois conjuntos (removendo duplicatas)
     df_filtered = pd.concat([df_data_alvo, df_resolvidos_semana]).drop_duplicates(subset=['REQUISICAO'])
     
@@ -81,6 +82,7 @@ def _filter_data(df, ano, semana, responsavel, status_filtrados):
         df_filtered = df_filtered[df_filtered['STATUS'].isin(status_filtrados)]
     
     # Aplicar lógica de data de exibição (mantém a lógica original)
+    df_filtered = df_filtered[~df_filtered['STATUS'].isin(['Pendente Aprovação'])]
     df_filtered['DATA_DISPLAY'] = df_filtered.apply(_get_display_date, axis=1)
     
     return df_filtered
@@ -103,8 +105,10 @@ def _show_filter_info(status_filtrados):
 
 def _show_week_metrics(df_filtered, ano, semana):
     """Mostra métricas da semana"""
+    
     col1, col2, col3, col4, col5 = st.columns(5)
     
+    df_filtered = df_filtered[~df_filtered['STATUS'].isin(['Pendente Aprovação'])]
     # Aplicar lógica de exibição para métricas
     def get_display_date_for_metrics(row):
         """Determina em que data o chamado deve aparecer no Kanban - mesma lógica"""
