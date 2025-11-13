@@ -245,21 +245,30 @@ def _process_data_original_logic(df_req, df_req_minha):
     
     # Criar DATA_ALVO com nova lógica: se passou da Data Esperada, usar DATA_PREV_SOLUCAO
     from datetime import datetime
-    hoje = datetime.now().date()
     
     if 'Data Esperada' in df_final.columns and 'DATA_PREV_SOLUCAO' in df_final.columns:
         # Converter para datetime se necessário
         df_final['Data Esperada'] = pd.to_datetime(df_final['Data Esperada'], errors='coerce')
         
-        # Lógica: se hoje > Data Esperada, usar DATA_PREV_SOLUCAO, senão usar Data Esperada
+        # Lógica: 
+        # 1. Se não tem Data Esperada, usar DATA_PREV_SOLUCAO
+        # 2. Se Data Esperada > DATA_PREV_SOLUCAO, usar DATA_PREV_SOLUCAO
+        # 3. Caso contrário, usar Data Esperada
         def get_data_alvo(row):
             data_esp = row.get('Data Esperada')
             data_prev = row.get('DATA_PREV_SOLUCAO')
             
-            if pd.notna(data_esp):
-                # Se passou da Data Esperada, retorna DATA_PREV_SOLUCAO
-                if hoje > data_esp.date() and pd.notna(data_prev):
+            # Sem Data Esperada, usar Data Prev
+            if pd.isna(data_esp) and pd.notna(data_prev):
+                return data_prev
+            
+            # Se Data Esperada > Data Prev, usar Data Prev
+            if pd.notna(data_esp) and pd.notna(data_prev):
+                if data_esp.date() > data_prev.date():
                     return data_prev
+            
+            # Caso contrário, usar Data Esperada
+            if pd.notna(data_esp):
                 return data_esp
             elif pd.notna(data_prev):
                 return data_prev
