@@ -131,7 +131,7 @@ def _show_week_metrics(df_filtered, ano, semana):
 
     # Calcular métricas baseadas apenas nos chamados visíveis no Kanban
     total_semana = len(df_kanban_visible)
-    resolvidos = len(df_kanban_visible[df_kanban_visible['STATUS_CATEGORIA'].isin(['RESOLVIDO', 'FECHADO'])])
+    resolvidos = len(df_kanban_visible[df_kanban_visible['STATUS'] == 'Resolvido'])
     em_aberto = len(df_kanban_visible[~df_kanban_visible['STATUS_CATEGORIA'].isin(['RESOLVIDO', 'FECHADO', 'CANCELADO'])])
 
     # Para SLA: considerar apenas chamados Resolvidos ou Fechados VISÍVEIS no Kanban
