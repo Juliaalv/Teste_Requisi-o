@@ -324,10 +324,9 @@ def _clear_data_cache():
 def _show_system_info(df, ano, semana, responsavel, status_filtrados):
     """Mostra informações do sistema na sidebar"""
     st.sidebar.markdown("---")
-    st.sidebar.subheader("ℹ️ Informações do Sistema")
+    st.sidebar.subheader("Informações do Sistema")
     st.sidebar.caption(f"Data atual: {datetime.now().strftime('%d/%m/%Y')}")
-    st.sidebar.caption(f"Última atualização: {datetime.now().strftime('%H:%M:%S')}")
-    
+
     # Intervalo de datas dos dados
     if 'DATA_ALVO' in df.columns and len(df) > 0:
         data_min = df['DATA_ALVO'].min().strftime('%d/%m/%Y')
@@ -349,8 +348,6 @@ def _show_system_info(df, ano, semana, responsavel, status_filtrados):
         if len(df_total) > 0:
             percentual = (len(df_filtrado) / len(df_total)) * 100
             st.sidebar.caption(f"Percentual exibido: {percentual:.1f}%")
-    else:
-        st.sidebar.caption(f"Total de registros: {len(df_total):,}")
 
 if __name__ == "__main__":
     main()
