@@ -245,30 +245,21 @@ def _process_data_original_logic(df_req, df_req_minha):
     
     # Criar DATA_ALVO com nova lógica: se passou da Data Esperada, usar DATA_PREV_SOLUCAO
     from datetime import datetime
+    hoje = datetime.now().date()
     
     if 'Data Esperada' in df_final.columns and 'DATA_PREV_SOLUCAO' in df_final.columns:
         # Converter para datetime se necessário
         df_final['Data Esperada'] = pd.to_datetime(df_final['Data Esperada'], errors='coerce')
         
-        # Lógica: 
-        # 1. Se não tem Data Esperada, usar DATA_PREV_SOLUCAO
-        # 2. Se Data Esperada > DATA_PREV_SOLUCAO, usar DATA_PREV_SOLUCAO
-        # 3. Caso contrário, usar Data Esperada
+        # Lógica: se hoje > Data Esperada, usar DATA_PREV_SOLUCAO, senão usar Data Esperada
         def get_data_alvo(row):
             data_esp = row.get('Data Esperada')
             data_prev = row.get('DATA_PREV_SOLUCAO')
             
-            # Sem Data Esperada, usar Data Prev
-            if pd.isna(data_esp) and pd.notna(data_prev):
-                return data_prev
-            
-            # Se Data Esperada > Data Prev, usar Data Prev
-            if pd.notna(data_esp) and pd.notna(data_prev):
-                if data_esp.date() > data_prev.date():
-                    return data_prev
-            
-            # Caso contrário, usar Data Esperada
             if pd.notna(data_esp):
+                # Se passou da Data Esperada, retorna DATA_PREV_SOLUCAO
+                if hoje > data_esp.date() and pd.notna(data_prev):
+                    return data_prev
                 return data_esp
             elif pd.notna(data_prev):
                 return data_prev
@@ -324,9 +315,10 @@ def _clear_data_cache():
 def _show_system_info(df, ano, semana, responsavel, status_filtrados):
     """Mostra informações do sistema na sidebar"""
     st.sidebar.markdown("---")
-    st.sidebar.subheader("Informações do Sistema")
+    st.sidebar.subheader("ℹ️ Informações do Sistema")
     st.sidebar.caption(f"Data atual: {datetime.now().strftime('%d/%m/%Y')}")
-
+    st.sidebar.caption(f"Última atualização: {datetime.now().strftime('%H:%M:%S')}")
+    
     # Intervalo de datas dos dados
     if 'DATA_ALVO' in df.columns and len(df) > 0:
         data_min = df['DATA_ALVO'].min().strftime('%d/%m/%Y')
@@ -348,6 +340,8 @@ def _show_system_info(df, ano, semana, responsavel, status_filtrados):
         if len(df_total) > 0:
             percentual = (len(df_filtrado) / len(df_total)) * 100
             st.sidebar.caption(f"Percentual exibido: {percentual:.1f}%")
+    else:
+        st.sidebar.caption(f"Total de registros: {len(df_total):,}")
 
 if __name__ == "__main__":
     main()

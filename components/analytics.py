@@ -40,30 +40,27 @@ def create_analytics(df, ano, semana, responsavel, status_filtrados):
 def _filter_analytics_data(df, ano, semana, responsavel, status_filtrados):
     """Filtra dados para análise - MESMA LÓGICA DO KANBAN"""
     
-    # Aplicar get_display_date para determinar em qual semana cada chamado aparece
-    df_temp = df.copy()
-    
-    def get_display_date_analytics(row):
-        """Mesma lógica do get_display_date do Kanban"""
-        status_clean = str(row.get('STATUS', '')).strip()
-        
-        if status_clean.lower() in ['resolvido', 'fechado'] and pd.notna(row.get('DATA_RESOLUCAO')):
-            return row['DATA_RESOLUCAO'].date()
-        else:
-            return row['DATA_ALVO_DATE']
-    
-    df_temp['DATA_DISPLAY'] = df_temp.apply(get_display_date_analytics, axis=1)
-    
-    # Calcular semana e ano da DATA_DISPLAY
-    df_temp['DATA_DISPLAY_DT'] = pd.to_datetime(df_temp['DATA_DISPLAY'])
-    df_temp['SEMANA_DISPLAY'] = df_temp['DATA_DISPLAY_DT'].dt.isocalendar().week
-    df_temp['ANO_DISPLAY'] = df_temp['DATA_DISPLAY_DT'].dt.year
-    
-    # Filtrar pela semana de exibição
-    df_filtered = df_temp[
-        (df_temp['ANO_DISPLAY'] == ano) & 
-        (df_temp['SEMANA_DISPLAY'] == semana)
+    # PRIMEIRO: Filtrar por DATA_ALVO
+    df_data_alvo = df[
+        (df['ANO_ALVO'] == ano) & 
+        (df['SEMANA_ALVO'] == semana)
     ].copy()
+    
+    # SEGUNDO: Adicionar chamados RESOLVIDOS/FECHADOS nesta semana
+    df_temp = df.copy()
+    df_temp['DATA_RESOLUCAO_VALIDA'] = pd.notna(df_temp['DATA_RESOLUCAO'])
+    df_temp['SEMANA_RESOLUCAO'] = df_temp['DATA_RESOLUCAO'].dt.isocalendar().week
+    df_temp['ANO_RESOLUCAO'] = df_temp['DATA_RESOLUCAO'].dt.year
+    
+    df_resolvidos_semana = df_temp[
+        (df_temp['STATUS'].isin(['Resolvido', 'Fechado'])) &
+        (df_temp['DATA_RESOLUCAO_VALIDA']) &
+        (df_temp['ANO_RESOLUCAO'] == ano) &
+        (df_temp['SEMANA_RESOLUCAO'] == semana)
+    ].copy()
+    
+    # TERCEIRO: Combinar removendo duplicatas
+    df_filtered = pd.concat([df_data_alvo, df_resolvidos_semana]).drop_duplicates(subset=['REQUISICAO'])
     
     # Aplicar filtros adicionais
     if responsavel != 'Todos':
@@ -73,6 +70,7 @@ def _filter_analytics_data(df, ano, semana, responsavel, status_filtrados):
         df_filtered = df_filtered[df_filtered['STATUS'].isin(status_filtrados)]
     
     return df_filtered
+
 def _create_data_alvo_analysis(df_filtered, ano, semana):
     """Cria análise por data alvo"""
     col1, col2 = st.columns(2)
