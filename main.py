@@ -343,5 +343,8 @@ def _show_system_info(df, ano, semana, responsavel, status_filtrados):
     else:
         st.sidebar.caption(f"Total de registros: {len(df_total):,}")
 
+
+
+
 if __name__ == "__main__":
     main()

@@ -31,7 +31,7 @@ def create_kanban_view(df, ano, semana, responsavel, status_filtrados):
     # Mostrar métricas da semana
     _show_week_metrics(df_filtered, ano, semana)
     
-    # Criar visualização Kanban
+
     _create_week_kanban(df_filtered, ano, semana, responsavel, status_filtrados, is_current_week)
 
 def _create_header(responsavel, is_current_week, semana, ano):
@@ -102,36 +102,26 @@ def _show_filter_info(status_filtrados):
                (f" e mais {len(status_filtrados) - 3}" if len(status_filtrados) > 3 else ""))
 
 def _show_week_metrics(df_filtered, ano, semana):
-    """Mostra métricas da semana"""
+    """Mostra métricas da semana - APENAS chamados visíveis no Kanban"""
     col1, col2, col3, col4, col5 = st.columns(5)
     
-    # Aplicar lógica de exibição para métricas
-    def get_display_date_for_metrics(row):
-        """Determina em que data o chamado deve aparecer no Kanban - mesma lógica"""
-        status_clean = str(row.get('STATUS', '')).strip()
-        
-        if status_clean.lower() in ['resolvido', 'fechado'] and pd.notna(row.get('DATA_RESOLUCAO')):
-            return row['DATA_RESOLUCAO'].date()
-        else:
-            return row['DATA_ALVO_DATE']
-
-    # Aplicar get_display_date nos dados filtrados
-    df_filtered_copy = df_filtered.copy()
-    df_filtered_copy['DATA_DISPLAY'] = df_filtered_copy.apply(get_display_date_for_metrics, axis=1)
-
-    # Obter datas da semana para filtrar apenas chamados que aparecem no Kanban
+    # 🔧 CORREÇÃO CRÍTICA: Filtrar apenas chamados que aparecem visualmente no Kanban
+    # df_filtered pode incluir chamados que NÃO aparecem nos 7 dias da semana
+    # (ex: resolvidos em semana anterior/posterior com DATA_ALVO diferentes)
+    # As métricas devem refletir APENAS o que o usuário vê
+    
     week_dates = get_week_dates(ano, semana)
+    
+    # Manter apenas chamados cuja DATA_DISPLAY está dentro dos 7 dias da semana
+    df_visible = df_filtered[df_filtered['DATA_DISPLAY'].isin(week_dates)].copy()
+    
+    # Agora calcular as métricas com dados visíveis apenas
+    total_semana = len(df_visible)
+    resolvidos = len(df_visible[df_visible['STATUS_CATEGORIA'].isin(['RESOLVIDO', 'FECHADO'])])
+    em_aberto = len(df_visible[~df_visible['STATUS_CATEGORIA'].isin(['RESOLVIDO', 'FECHADO', 'CANCELADO'])])
 
-    # Filtrar apenas chamados que aparecem na semana do Kanban
-    df_kanban_visible = df_filtered_copy[df_filtered_copy['DATA_DISPLAY'].isin(week_dates)]
-
-    # Calcular métricas baseadas apenas nos chamados visíveis no Kanban
-    total_semana = len(df_kanban_visible)
-    resolvidos = len(df_kanban_visible[df_kanban_visible['STATUS_CATEGORIA'].isin(['RESOLVIDO', 'FECHADO'])])
-    em_aberto = len(df_kanban_visible[~df_kanban_visible['STATUS_CATEGORIA'].isin(['RESOLVIDO', 'FECHADO', 'CANCELADO'])])
-
-    # Para SLA: considerar apenas chamados Resolvidos ou Fechados VISÍVEIS no Kanban
-    df_sla_elegivel = df_kanban_visible[df_kanban_visible['STATUS'].isin(['Resolvido', 'Fechado'])]
+    # Para SLA: considerar apenas chamados Resolvidos ou Fechados que são visíveis
+    df_sla_elegivel = df_visible[df_visible['STATUS'].isin(['Resolvido', 'Fechado'])]
     sla_violados = len(df_sla_elegivel[df_sla_elegivel['SLA_VIOLADO'] == True])
     total_sla_elegivel = len(df_sla_elegivel)
 
@@ -315,3 +305,4 @@ def get_week_dates(year, week):
         today = datetime.now().date()
         week_start = today - timedelta(days=today.weekday())
         return [week_start + timedelta(days=i) for i in range(7)]
+

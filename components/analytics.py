@@ -38,29 +38,16 @@ def create_analytics(df, ano, semana, responsavel, status_filtrados):
         _create_resumo_detalhado(df_filtered)
 
 def _filter_analytics_data(df, ano, semana, responsavel, status_filtrados):
-    """Filtra dados para análise - MESMA LÓGICA DO KANBAN"""
+    """Filtra dados para análise - APENAS chamados com DATA_ALVO nesta semana"""
     
-    # PRIMEIRO: Filtrar por DATA_ALVO
-    df_data_alvo = df[
+    # 🔧 CORREÇÃO CRÍTICA: Análise deve mostrar APENAS chamados com DATA_ALVO nesta semana
+    # NÃO incluir chamados resolvidos em outra semana (isso distorce os gráficos)
+    
+    # Filtrar APENAS por DATA_ALVO
+    df_filtered = df[
         (df['ANO_ALVO'] == ano) & 
         (df['SEMANA_ALVO'] == semana)
     ].copy()
-    
-    # SEGUNDO: Adicionar chamados RESOLVIDOS/FECHADOS nesta semana
-    df_temp = df.copy()
-    df_temp['DATA_RESOLUCAO_VALIDA'] = pd.notna(df_temp['DATA_RESOLUCAO'])
-    df_temp['SEMANA_RESOLUCAO'] = df_temp['DATA_RESOLUCAO'].dt.isocalendar().week
-    df_temp['ANO_RESOLUCAO'] = df_temp['DATA_RESOLUCAO'].dt.year
-    
-    df_resolvidos_semana = df_temp[
-        (df_temp['STATUS'].isin(['Resolvido', 'Fechado'])) &
-        (df_temp['DATA_RESOLUCAO_VALIDA']) &
-        (df_temp['ANO_RESOLUCAO'] == ano) &
-        (df_temp['SEMANA_RESOLUCAO'] == semana)
-    ].copy()
-    
-    # TERCEIRO: Combinar removendo duplicatas
-    df_filtered = pd.concat([df_data_alvo, df_resolvidos_semana]).drop_duplicates(subset=['REQUISICAO'])
     
     # Aplicar filtros adicionais
     if responsavel != 'Todos':
