@@ -26,7 +26,7 @@ def create_analytics(df, ano, semana, responsavel, status_filtrados):
         _create_sla_violated_table(df_filtered)
     
     with tab3:
-        _create_responsavel_analysis(df_filtered, responsavel)
+        _create_responsavel_analysis(df_filtered, responsavel, ano, semana)
     
     with tab4:
         _create_programados_extras_analysis(df_filtered, ano, semana)
@@ -271,8 +271,26 @@ def _create_sla_violated_table(df_filtered):
     else:
         st.success("🎉 Não há chamados resolvidos/fechados que violaram o SLA no período/filtros selecionados.")
 
-def _create_responsavel_analysis(df_filtered, responsavel):
-    """Cria análise por responsável"""
+def _create_responsavel_analysis(df_filtered, responsavel, ano, semana):
+    """Cria análise por responsável - APENAS chamados visíveis no Kanban"""
+    
+    # 🔧 CORREÇÃO: Filtrar apenas chamados que aparecem visualmente no Kanban
+    # Primeira: criar DATA_DISPLAY (mesma lógica do Kanban)
+    def get_display_date(row):
+        """Determina em que data o chamado deve aparecer"""
+        status_clean = str(row.get('STATUS', '')).strip()
+        if status_clean.lower() in ['resolvido', 'fechado'] and pd.notna(row.get('DATA_RESOLUCAO')):
+            return row['DATA_RESOLUCAO'].date()
+        else:
+            return row['DATA_ALVO_DATE']
+    
+    df_filtered = df_filtered.copy()
+    df_filtered['DATA_DISPLAY'] = df_filtered.apply(get_display_date, axis=1)
+    
+    # Agora filtrar apenas os 7 dias da semana
+    week_dates = get_week_dates(ano, semana)
+    df_filtered = df_filtered[df_filtered['DATA_DISPLAY'].isin(week_dates)].copy()
+    
     if responsavel == 'Todos':
         col1, col2 = st.columns(2)
         
