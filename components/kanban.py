@@ -31,8 +31,6 @@ def create_kanban_view(df, ano, semana, responsavel, status_filtrados):
     # Mostrar métricas da semana
     _show_week_metrics(df_filtered, ano, semana)
     
-    # Debug - validar números
-    debug_week_metrics(df_filtered, ano, semana)
     _create_week_kanban(df_filtered, ano, semana, responsavel, status_filtrados, is_current_week)
 
 def _create_header(responsavel, is_current_week, semana, ano):
@@ -307,88 +305,3 @@ def get_week_dates(year, week):
         week_start = today - timedelta(days=today.weekday())
         return [week_start + timedelta(days=i) for i in range(7)]
 
-def debug_week_metrics(df_filtered, ano, semana):
-    """Debug: valida números das métricas com análises detalhadas"""
-    import streamlit as st
-    import pandas as pd
-    
-    total_esperado = len(df_filtered)
-    week_dates = get_week_dates(ano, semana)
-    df_kanban = df_filtered[df_filtered['DATA_DISPLAY'].isin(week_dates)]
-    total_visivel = len(df_kanban)
-    
-    with st.expander("🔍 DEBUG - Validação Completa", expanded=False):
-        
-        # 1. RESUMO GERAL
-        st.subheader("📊 Resumo Geral")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Total df_filtered", total_esperado)
-        with col2:
-            st.metric("Visível no Kanban", total_visivel)
-        with col3:
-            if total_esperado == total_visivel:
-                st.success("✅ OK")
-            else:
-                st.error(f"❌ Faltam {total_esperado - total_visivel}")
-        
-        st.markdown("---")
-        
-        # 2. CHAMADOS COM DATA_ALVO vs RESOLVIDOS
-        st.subheader("📋 Distribuição por Tipo")
-        
-        # Contar chamados com DATA_ALVO na semana (original)
-        chamados_data_alvo = len(df_filtered[
-            (df_filtered['ANO_ALVO'] == ano) & 
-            (df_filtered['SEMANA_ALVO'] == semana)
-        ])
-        
-        # Contar chamados resolvidos na semana
-        chamados_resolvidos = len(df_filtered[
-            (df_filtered['STATUS'].isin(['Resolvido', 'Fechado'])) &
-            (df_filtered['DATA_RESOLUCAO'].notna())
-        ])
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Com DATA_ALVO", chamados_data_alvo)
-        with col2:
-            st.metric("Resolvidos/Fechados", chamados_resolvidos)
-        with col3:
-            st.metric("Total", total_esperado)
-        
-        st.markdown("---")
-        
-        # 3. DISTRIBUIÇÃO POR RESPONSÁVEL
-        st.subheader("👤 Distribuição por Responsável")
-        
-        responsavel_counts = df_filtered['RESPONSAVEL'].value_counts()
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.dataframe(responsavel_counts, use_container_width=True)
-        with col2:
-            st.bar_chart(responsavel_counts)
-        
-        st.markdown("---")
-        
-        # 4. CHAMADOS POR DIA
-        st.subheader("📅 Chamados por Dia da Semana")
-        
-        days_pt = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
-        dia_counts = {}
-        
-        for i, (date, day_pt) in enumerate(zip(week_dates, days_pt)):
-            count = len(df_kanban[df_kanban['DATA_DISPLAY'] == date])
-            dia_counts[f"{day_pt} ({date.strftime('%d/%m')})"] = count
-        
-        dia_df = pd.DataFrame(list(dia_counts.items()), columns=['Dia', 'Quantidade'])
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.dataframe(dia_df, use_container_width=True, hide_index=True)
-        with col2:
-            st.bar_chart(dia_df.set_index('Dia'))
-        
-        st.markdown("---")
-        st.write(f"**Semana {semana}/{ano}** - {week_dates[0].strftime('%d/%m')} a {week_dates[6].strftime('%d/%m/%Y')}")
