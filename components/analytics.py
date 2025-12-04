@@ -35,7 +35,7 @@ def create_analytics(df, ano, semana, responsavel, status_filtrados):
         _create_detailed_list(df_filtered)
     
     with tab6:
-        _create_resumo_detalhado(df_filtered)
+        _create_resumo_detalhado(df_filtered, ano, semana)
 
 def _filter_analytics_data(df, ano, semana, responsavel, status_filtrados):
     """Filtra dados para análise - APENAS chamados com DATA_ALVO nesta semana"""
@@ -570,21 +570,36 @@ def _create_detailed_list(df_filtered):
 
 
 
-def _create_resumo_detalhado(df_filtered):
-    """Cria resumo detalhado com distribuição por resumo, status e empresa"""
+def _create_resumo_detalhado(df_filtered, ano, semana):
+    """Cria resumo detalhado com distribuição por resumo, status e empresa - MESMA LÓGICA DO KANBAN"""
     
-  
+    # 🔧 CORREÇÃO FINAL: Usar exatamente a mesma lógica do Kanban
+    # O Kanban já vem com df_filtered que inclui:
+    # 1. Chamados com DATA_ALVO na semana
+    # 2. + Chamados RESOLVIDOS/FECHADOS nesta semana
+    # 
+    # Basta aplicar o DATA_DISPLAY para exibição correta (SEM filtrar por week_dates)
+    
+    def get_display_date(row):
+        status_clean = str(row.get('STATUS', '')).strip()
+        if status_clean.lower() in ['resolvido', 'fechado'] and pd.notna(row.get('DATA_RESOLUCAO')):
+            return row['DATA_RESOLUCAO'].date()
+        else:
+            return row['DATA_ALVO_DATE']
+    
+    df_filtered_display = df_filtered.copy()
+    df_filtered_display['DATA_DISPLAY'] = df_filtered_display.apply(get_display_date, axis=1)
     
     # LINHA 1: Gráfico Empresa | Gráfico Status
     col1, col2 = st.columns(2)
     
     with col1:
         st.markdown("####  Distribuição por Empresa")
-        _create_empresa_chart(df_filtered)
+        _create_empresa_chart(df_filtered_display)
     
     with col2:
         st.markdown("####  Distribuição por Status")
-        _create_status_chart(df_filtered)
+        _create_status_chart(df_filtered_display)
     
     st.markdown("---")
     
@@ -593,17 +608,17 @@ def _create_resumo_detalhado(df_filtered):
     
     with col3:
 
-        _create_empresa_table(df_filtered)
+        _create_empresa_table(df_filtered_display)
     
     with col4:
      
-        _create_resumo_distribution(df_filtered)
+        _create_resumo_distribution(df_filtered_display)
     
     st.markdown("---")
     
     # LINHA 3: Tabela Status (ocupando 2 colunas)
     st.markdown("#### 📊 Distribuição por Status")
-    _create_status_table(df_filtered)
+    _create_status_table(df_filtered_display)
 
 
 def _create_resumo_distribution(df_filtered):
@@ -687,7 +702,7 @@ def _create_empresa_distribution(df_filtered):
     percentual_list = [round((x / total_empresa * 100), 1) for x in quantidade_list]
     
     df_empresa_table = pd.DataFrame({
-        'Empresa': empresa_counts.index,
+        'Empresa': empresa_counts.index,  
         'Quantidade': quantidade_list,
         '% Total': percentual_list
     })

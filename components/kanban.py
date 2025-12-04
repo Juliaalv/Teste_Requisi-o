@@ -31,6 +31,7 @@ def create_kanban_view(df, ano, semana, responsavel, status_filtrados):
     # Mostrar métricas da semana
     _show_week_metrics(df_filtered, ano, semana)
     
+
     _create_week_kanban(df_filtered, ano, semana, responsavel, status_filtrados, is_current_week)
 
 def _create_header(responsavel, is_current_week, semana, ano):
