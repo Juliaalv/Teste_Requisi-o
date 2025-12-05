@@ -77,11 +77,9 @@ def main():
 
 def _check_data_loaded():
     """Verifica se os dados já foram carregados e processados"""
-    # Verifica se há dados em cache ou arquivo processado
     if 'data_processed' in st.session_state and st.session_state.data_processed:
         return True
     
-    # Verifica se existe arquivo parquet processado
     if os.path.exists("requisicoes_data.parquet"):
         st.session_state.data_processed = True
         return True
@@ -178,7 +176,6 @@ def _process_uploaded_files(uploaded_req, uploaded_minha):
     except Exception as e:
         st.error(f"❌ Erro ao processar arquivos: {str(e)}")
         st.error("Verifique se os arquivos estão no formato correto e tente novamente.")
-        # Mostrar informações específicas do erro para debug
         import traceback
         with st.expander("Detalhes do erro (para debug)"):
             st.code(traceback.format_exc())
@@ -187,7 +184,7 @@ def _process_data_original_logic(df_req, df_req_minha):
     """Aplica a lógica original de processamento dos dados"""
     # Verificar se a coluna RESOLVEDOR_PADRAO existe
     if 'RESOLVEDOR_PADRAO' in df_req.columns:
-        df_req = df_req[df_req['RESOLVEDOR_PADRAO'] == 'AUTOMAÇÃO TELECOM']
+        df_req = df_req[df_req['RESOLVEDOR_PADRAO'] == 'AUTOMAÇÃO TELECOM'].copy()
     
     # Selecionar apenas colunas que existem no df_req
     required_cols_req = ['NUM_CHAMADO', 'DATA_ABERTURA', 'DATA_PREV_SOLUCAO',
@@ -196,15 +193,15 @@ def _process_data_original_logic(df_req, df_req_minha):
                          'EMPRESA_SOLICITANTE', 'CLIENTE_CIDADE', 'CLIENTE_UF']
     
     available_cols_req = [col for col in required_cols_req if col in df_req.columns]
-    df_req = df_req[available_cols_req]
+    df_req = df_req[available_cols_req].copy()
     
     # Selecionar apenas colunas que existem no df_req_minha
     required_cols_minha = ['Requisição de Serviço','Data Esperada', 'Resumo', 
                            'Status', 'Proprietário', 'Cliente', 'Criado em', 
-                           'Resolvido em', 'SLA - Data Prevista Solução']
+                           'Resolvido em', 'SLA - Data Prevista Solução', 'SLA - Data Quebra']
     
     available_cols_minha = [col for col in required_cols_minha if col in df_req_minha.columns]
-    df_req_minha = df_req_minha[available_cols_minha]
+    df_req_minha = df_req_minha[available_cols_minha].copy()
     
     # Renomear colunas apenas se existem
     rename_dict = {}
@@ -222,6 +219,11 @@ def _process_data_original_logic(df_req, df_req_minha):
         rename_dict['Criado em'] = 'DATA_ABERTURA'
     if 'SLA - Data Prevista Solução' in df_req_minha.columns:
         rename_dict['SLA - Data Prevista Solução'] = 'DATA_PREV_SOLUCAO'
+    if 'SLA - Data Quebra' in df_req_minha.columns:
+        rename_dict['SLA - Data Quebra'] = 'DATA_QUEBRA_SLA'
+    # ⚠️ IMPORTANTE: Renomear 'Status' para 'STATUS_MINHA' para evitar duplicatas
+    if 'Status' in df_req_minha.columns:
+        rename_dict['Status'] = 'STATUS_MINHA'
     
     df_req_minha.rename(columns=rename_dict, inplace=True)
     
@@ -233,7 +235,7 @@ def _process_data_original_logic(df_req, df_req_minha):
     # Fazer o merge apenas se NUM_CHAMADO existe em ambos
     if 'NUM_CHAMADO' in df_req.columns and 'NUM_CHAMADO' in df_req_minha.columns:
         colunas_para_merge = ['NUM_CHAMADO'] + list(colunas_novas)
-        df_req_minha_filtrado = df_req_minha[colunas_para_merge]
+        df_req_minha_filtrado = df_req_minha[colunas_para_merge].copy()
         df_final = pd.merge(df_req, df_req_minha_filtrado, on='NUM_CHAMADO', how='left')
     else:
         # Se não conseguir fazer merge, usar apenas df_req
@@ -243,33 +245,35 @@ def _process_data_original_logic(df_req, df_req_minha):
     if 'RESPONSAVEL' in df_final.columns:
         df_final['RESPONSAVEL'] = df_final['RESPONSAVEL'].fillna('Proprietário Vazio')
     
-    # Criar DATA_ALVO com nova lógica: se passou da Data Esperada, usar DATA_PREV_SOLUCAO
+    # Criar DATA_ALVO com nova lógica: prioridade é Data Esperada > DATA_QUEBRA_SLA > DATA_PREV_SOLUCAO
     from datetime import datetime
     hoje = datetime.now().date()
     
-    if 'Data Esperada' in df_final.columns and 'DATA_PREV_SOLUCAO' in df_final.columns:
-        # Converter para datetime se necessário
+    def get_data_alvo(row):
+        # 1. Tentar usar Data Esperada (do arquivo 2 - Requisições da Minha Equipe)
+        data_esp = row.get('Data Esperada')
+        if pd.notna(data_esp):
+            data_esp_date = pd.to_datetime(data_esp, errors='coerce')
+            if pd.notna(data_esp_date):
+                return data_esp_date
+        
+        # 2. Se Data Esperada não existe ou está vazia, usar DATA_QUEBRA_SLA
+        data_quebra = row.get('DATA_QUEBRA_SLA')
+        if pd.notna(data_quebra):
+            return data_quebra
+        
+        # 3. Se DATA_QUEBRA_SLA não existe, usar DATA_PREV_SOLUCAO
+        data_prev = row.get('DATA_PREV_SOLUCAO')
+        if pd.notna(data_prev):
+            return data_prev
+        
+        return None
+    
+    # Converter Data Esperada se existir
+    if 'Data Esperada' in df_final.columns:
         df_final['Data Esperada'] = pd.to_datetime(df_final['Data Esperada'], errors='coerce')
-        
-        # Lógica: se hoje > Data Esperada, usar DATA_PREV_SOLUCAO, senão usar Data Esperada
-        def get_data_alvo(row):
-            data_esp = row.get('Data Esperada')
-            data_prev = row.get('DATA_PREV_SOLUCAO')
-            
-            if pd.notna(data_esp):
-                # Se passou da Data Esperada, retorna DATA_PREV_SOLUCAO
-                if hoje > data_esp.date() and pd.notna(data_prev):
-                    return data_prev
-                return data_esp
-            elif pd.notna(data_prev):
-                return data_prev
-            return None
-        
-        df_final['DATA_ALVO'] = df_final.apply(get_data_alvo, axis=1)
-    elif 'DATA_PREV_SOLUCAO' in df_final.columns:
-        df_final['DATA_ALVO'] = df_final['DATA_PREV_SOLUCAO']
-    elif 'Data Esperada' in df_final.columns:
-        df_final['DATA_ALVO'] = df_final['Data Esperada']
+    
+    df_final['DATA_ALVO'] = df_final.apply(get_data_alvo, axis=1)
     
     # Aplicar padronização de colunas
     df_final = _apply_column_mapping(df_final)
@@ -342,8 +346,6 @@ def _show_system_info(df, ano, semana, responsavel, status_filtrados):
             st.sidebar.caption(f"Percentual exibido: {percentual:.1f}%")
     else:
         st.sidebar.caption(f"Total de registros: {len(df_total):,}")
-
-
 
 
 if __name__ == "__main__":

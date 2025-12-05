@@ -247,7 +247,7 @@ def _create_sla_violated_table(df_filtered):
     display_cols = [
         'REQUISICAO', 
         'DATA_ALVO', 
-        'DATA_RESOLUCAO', # Assumindo que esta coluna existe para mostrar o desvio
+        'DATA_RESOLUCAO',
         'RESUMO', 
         'RESPONSAVEL'
     ]
@@ -519,21 +519,23 @@ def _create_responsavel_table(df_filtered):
     
     # Converter para DataFrame e ordenar por backlog ativo
     df_consolidado = pd.DataFrame(tabela_consolidada)
-    df_consolidado = df_consolidado.sort_values('Backlog Ativo', ascending=False)
+    
+    # ✅ Corrigir: Verificar se DataFrame não está vazio e tem a coluna antes de ordenar
+    if len(df_consolidado) > 0 and 'Backlog Ativo' in df_consolidado.columns:
+        df_consolidado = df_consolidado.sort_values('Backlog Ativo', ascending=False)
     
     st.dataframe(df_consolidado, use_container_width=True, hide_index=True)
     
 def _create_detailed_list(df_filtered):
     """
     Cria lista detalhada de chamados, com opção de alternar entre 100 e tudo.
-    O botão de exportar foi removido.
     """
     display_cols = ['REQUISICAO', 'DATA_ALVO', 'STATUS', 'RESUMO', 'RESPONSAVEL', 'SLA_VIOLADO']
     available_cols = [col for col in display_cols if col in df_filtered.columns]
     
     # 1. Preparar o DataFrame completo
     df_display = df_filtered.sort_values('DATA_ALVO', ascending=False)
-    df_visual = df_display[available_cols] # DataFrame para visualização
+    df_visual = df_display[available_cols]
     total_chamados = len(df_display)
     
     # --- Controles (Apenas o Checkbox e Legenda) ---
@@ -559,7 +561,7 @@ def _create_detailed_list(df_filtered):
             elif mostrar_tudo:
                 st.caption(f"Mostrando todos os {total_chamados} chamados.")
             elif total_chamados <= 100:
-                 st.caption(f"Mostrando todos os {total_chamados} chamados.") # Se <= 100, mostra todos por padrão
+                 st.caption(f"Mostrando todos os {total_chamados} chamados.")
 
         # 3. Exibir o DataFrame (limitado ou completo)
         st.dataframe(df_to_show, use_container_width=True, hide_index=True)
@@ -567,19 +569,10 @@ def _create_detailed_list(df_filtered):
     elif total_chamados == 0:
          st.info("Nenhum chamado encontrado com os filtros aplicados.")
 
-
-
-
 def _create_resumo_detalhado(df_filtered, ano, semana):
-    """Cria resumo detalhado com distribuição por resumo, status e empresa - MESMA LÓGICA DO KANBAN"""
+    """Cria resumo detalhado com distribuição por resumo, status e empresa"""
     
     # 🔧 CORREÇÃO FINAL: Usar exatamente a mesma lógica do Kanban
-    # O Kanban já vem com df_filtered que inclui:
-    # 1. Chamados com DATA_ALVO na semana
-    # 2. + Chamados RESOLVIDOS/FECHADOS nesta semana
-    # 
-    # Basta aplicar o DATA_DISPLAY para exibição correta (SEM filtrar por week_dates)
-    
     def get_display_date(row):
         status_clean = str(row.get('STATUS', '')).strip()
         if status_clean.lower() in ['resolvido', 'fechado'] and pd.notna(row.get('DATA_RESOLUCAO')):
@@ -607,11 +600,9 @@ def _create_resumo_detalhado(df_filtered, ano, semana):
     col3, col4 = st.columns(2)
     
     with col3:
-
         _create_empresa_table(df_filtered_display)
     
     with col4:
-     
         _create_resumo_distribution(df_filtered_display)
     
     st.markdown("---")
@@ -619,7 +610,6 @@ def _create_resumo_detalhado(df_filtered, ano, semana):
     # LINHA 3: Tabela Status (ocupando 2 colunas)
     st.markdown("#### 📊 Distribuição por Status")
     _create_status_table(df_filtered_display)
-
 
 def _create_resumo_distribution(df_filtered):
     """Cria distribuição de resumos com previstos vs realizados"""
@@ -634,10 +624,10 @@ def _create_resumo_distribution(df_filtered):
     for resumo in df_filtered['RESUMO'].dropna().unique():
         df_resumo = df_filtered[df_filtered['RESUMO'] == resumo]
         
-        # Contar previstos (DATA_ALVO da semana)
+        # Contar previstos
         previstos = len(df_resumo)
         
-        # Contar realizados (STATUS = Resolvido ou Fechado)
+        # Contar realizados
         realizados = len(df_resumo[df_resumo['STATUS'].isin(['Resolvido', 'Fechado'])])
         
         percentual = (realizados / previstos * 100) if previstos > 0 else 0
@@ -670,46 +660,6 @@ def _create_resumo_distribution(df_filtered):
     
     st.dataframe(df_resumo_stats, use_container_width=True, hide_index=True)
 
-
-def _create_empresa_distribution(df_filtered):
-    """Cria distribuição de chamados por empresa"""
-    
-    if 'EMPRESA_SOLICITANTE' not in df_filtered.columns:
-        st.info("Coluna 'EMPRESA_SOLICITANTE' não encontrada")
-        return
-    
-    # Contar por empresa
-    empresa_counts = df_filtered['EMPRESA_SOLICITANTE'].dropna().value_counts()
-    
-    if len(empresa_counts) == 0:
-        st.info("Nenhum dado de empresa disponível")
-        return
-    
-    # Criar gráfico
-    fig_empresa = px.pie(
-        values=empresa_counts.values,
-        names=empresa_counts.index,
-        title="Distribuição de Chamados por Empresa",
-        hole=0.3
-    )
-    
-    fig_empresa.update_layout(height=400)
-    st.plotly_chart(fig_empresa, use_container_width=True, key="chart_empresa_dist")
-    
-    # Tabela com números
-    quantidade_list = [int(x) for x in empresa_counts.values]
-    total_empresa = sum(quantidade_list)
-    percentual_list = [round((x / total_empresa * 100), 1) for x in quantidade_list]
-    
-    df_empresa_table = pd.DataFrame({
-        'Empresa': empresa_counts.index,  
-        'Quantidade': quantidade_list,
-        '% Total': percentual_list
-    })
-    
-    st.dataframe(df_empresa_table, use_container_width=True, hide_index=True)
-
-
 def _create_empresa_chart(df_filtered):
     """Cria apenas o gráfico de distribuição por empresa"""
     
@@ -733,7 +683,6 @@ def _create_empresa_chart(df_filtered):
     
     fig_empresa.update_layout(height=400)
     st.plotly_chart(fig_empresa, use_container_width=True, key="chart_empresa_dist_linha1")
-
 
 def _create_empresa_table(df_filtered):
     """Cria apenas a tabela de distribuição por empresa"""
@@ -762,8 +711,6 @@ def _create_empresa_table(df_filtered):
     
     st.dataframe(df_empresa_table, use_container_width=True, hide_index=True)
 
-
-
 def _create_status_table(df_filtered):
     """Cria tabela de distribuição por status"""
     
@@ -790,7 +737,6 @@ def _create_status_table(df_filtered):
     
     st.dataframe(df_status, use_container_width=True, hide_index=True)
 
-
 def _create_status_chart(df_filtered):
     """Cria gráfico de distribuição por status"""
     
@@ -809,11 +755,9 @@ def _create_status_chart(df_filtered):
         height=max(300, len(status_counts) * 30),
         showlegend=False,
         title='',
-    
     )
     
     st.plotly_chart(fig_status, use_container_width=True, key="chart_status_bars_linha1")
-
 
 def _get_status_colors():
     """Retorna mapeamento de cores para status"""

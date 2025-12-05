@@ -87,13 +87,18 @@ def _filter_data(df, ano, semana, responsavel, status_filtrados):
 
 def _get_display_date(row):
     """Determina em que data o chamado deve aparecer no Kanban"""
-    status_clean = str(row.get('STATUS', '')).strip()
+    # ✅ CORREÇÃO V3: Priorizar DATA_ALVO se existir, pois representa quando o chamado foi planejado
+    # Só usar DATA_RESOLUCAO se DATA_ALVO não existir
     
-    # MUDANÇA: agora inclui 'fechado' além de 'resolvido'
+    if pd.notna(row.get('DATA_ALVO_DATE')):
+        return row['DATA_ALVO_DATE']
+    
+    # Fallback: se não tiver DATA_ALVO, usar DATA_RESOLUCAO
+    status_clean = str(row.get('STATUS', '')).strip()
     if status_clean.lower() in ['resolvido', 'fechado'] and pd.notna(row.get('DATA_RESOLUCAO')):
         return row['DATA_RESOLUCAO'].date()
-    else:
-        return row['DATA_ALVO_DATE']
+    
+    return None
 
 def _show_filter_info(status_filtrados):
     """Mostra informações sobre filtros aplicados"""
@@ -305,4 +310,3 @@ def get_week_dates(year, week):
         today = datetime.now().date()
         week_start = today - timedelta(days=today.weekday())
         return [week_start + timedelta(days=i) for i in range(7)]
-
