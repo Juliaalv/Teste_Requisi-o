@@ -9,7 +9,7 @@ from components.sidebar import create_sidebar_filters
 from components.kanban import create_kanban_view
 from components.analytics import create_analytics
 from components.footer import create_footer
-
+s
 def main():
     """Função principal da aplicação com upload obrigatório"""
     # Configurar página
@@ -22,7 +22,7 @@ def main():
     # Container principal com margem para o rodapé
     st.markdown('<div class="main-content">', unsafe_allow_html=True)
     
-    # NOVA LÓGICA: Verificar se os dados já estão carregados
+    # Verificar se os dados já estão carregados
     if not _check_data_loaded():
         # Se não há dados carregados, mostrar interface de upload
         _show_upload_interface()
@@ -146,8 +146,8 @@ def _show_upload_interface():
         
         **Processamento:**
         - Os arquivos são mesclados automaticamente
+        - Prioridade para Status e Responsável da planilha da equipe
         - Dados são salvos localmente para próximas sessões
-        - Formato otimizado para melhor performance
         """)
 
 def _process_uploaded_files(uploaded_req, uploaded_minha):
@@ -158,7 +158,7 @@ def _process_uploaded_files(uploaded_req, uploaded_minha):
             df_req = pd.read_excel(uploaded_req)
             df_req_minha = pd.read_excel(uploaded_minha)
             
-            # Aplicar processamento original
+            # Aplicar processamento com a nova lógica corrigida
             df_final = _process_data_original_logic(df_req, df_req_minha)
             
             # Salvar parquet para próximas execuções
@@ -181,7 +181,7 @@ def _process_uploaded_files(uploaded_req, uploaded_minha):
             st.code(traceback.format_exc())
 
 def _process_data_original_logic(df_req, df_req_minha):
-    """Aplica a lógica original de processamento dos dados"""
+    """Aplica a lógica de processamento PRIORIZANDO ARQUIVO DA EQUIPE E CONSOLIDANDO DADOS"""
     # Verificar se a coluna RESOLVEDOR_PADRAO existe
     if 'RESOLVEDOR_PADRAO' in df_req.columns:
         df_req = df_req[df_req['RESOLVEDOR_PADRAO'] == 'AUTOMAÇÃO TELECOM'].copy()
@@ -203,27 +203,30 @@ def _process_data_original_logic(df_req, df_req_minha):
     available_cols_minha = [col for col in required_cols_minha if col in df_req_minha.columns]
     df_req_minha = df_req_minha[available_cols_minha].copy()
     
-    # Renomear colunas apenas se existem
+    # Renomear colunas do arquivo MINHA para sufixos específicos
     rename_dict = {}
     if 'Requisição de Serviço' in df_req_minha.columns:
         rename_dict['Requisição de Serviço'] = 'NUM_CHAMADO'
+    
+    # Campos que vamos usar para preencher buracos (Sufixo _MINHA)
     if 'Resumo' in df_req_minha.columns:
-        rename_dict['Resumo'] = 'TITULO'
-    if 'Proprietário' in df_req_minha.columns:
-        rename_dict['Proprietário'] = 'RESPONSAVEL'
+        rename_dict['Resumo'] = 'RESUMO_MINHA'  # Diferente de TITULO para podermos fundir
     if 'Cliente' in df_req_minha.columns:
-        rename_dict['Cliente'] = 'SOLICITANTE'
-    if 'Resolvido em' in df_req_minha.columns:
-        rename_dict['Resolvido em'] = 'DATA_RESOLUCAO'
-    if 'Criado em' in df_req_minha.columns:
-        rename_dict['Criado em'] = 'DATA_ABERTURA'
-    if 'SLA - Data Prevista Solução' in df_req_minha.columns:
-        rename_dict['SLA - Data Prevista Solução'] = 'DATA_PREV_SOLUCAO'
-    if 'SLA - Data Quebra' in df_req_minha.columns:
-        rename_dict['SLA - Data Quebra'] = 'DATA_QUEBRA_SLA'
-    # ⚠️ IMPORTANTE: Renomear 'Status' para 'STATUS_MINHA' para evitar duplicatas
+        rename_dict['Cliente'] = 'SOLICITANTE_MINHA' # Diferente de SOLICITANTE para podermos fundir
     if 'Status' in df_req_minha.columns:
         rename_dict['Status'] = 'STATUS_MINHA'
+    if 'Proprietário' in df_req_minha.columns:
+        rename_dict['Proprietário'] = 'RESPONSAVEL_MINHA'
+        
+    # Datas
+    if 'Resolvido em' in df_req_minha.columns:
+        rename_dict['Resolvido em'] = 'DATA_RESOLUCAO_MINHA'
+    if 'Criado em' in df_req_minha.columns:
+        rename_dict['Criado em'] = 'DATA_ABERTURA_MINHA'
+    if 'SLA - Data Prevista Solução' in df_req_minha.columns:
+        rename_dict['SLA - Data Prevista Solução'] = 'DATA_PREV_SOLUCAO_MINHA'
+    if 'SLA - Data Quebra' in df_req_minha.columns:
+        rename_dict['SLA - Data Quebra'] = 'DATA_QUEBRA_SLA' # Esse pode manter
     
     df_req_minha.rename(columns=rename_dict, inplace=True)
     
@@ -232,20 +235,74 @@ def _process_data_original_logic(df_req, df_req_minha):
     colunas_df_req_minha = set(df_req_minha.columns)
     colunas_novas = colunas_df_req_minha - colunas_df_req
     
-    # Fazer o merge apenas se NUM_CHAMADO existe em ambos
-    if 'NUM_CHAMADO' in df_req.columns and 'NUM_CHAMADO' in df_req_minha.columns:
+    # Fazer o merge
+    if 'NUM_CHAMADO' in df_req.columns or 'NUM_CHAMADO' in df_req_minha.columns:
         colunas_para_merge = ['NUM_CHAMADO'] + list(colunas_novas)
         df_req_minha_filtrado = df_req_minha[colunas_para_merge].copy()
-        df_final = pd.merge(df_req, df_req_minha_filtrado, on='NUM_CHAMADO', how='left')
+        
+        # OUTER JOIN: Garante que chamados apenas da planilha da equipe apareçam
+        df_final = pd.merge(df_req, df_req_minha_filtrado, on='NUM_CHAMADO', how='outer')
+        
+        # --- LÓGICA DE CONSOLIDAÇÃO DE DADOS ---
+        
+        # 1. Status (Prioridade Minha)
+        if 'STATUS_MINHA' in df_final.columns:
+            if 'Status' in df_final.columns:
+                df_final['Status'] = df_final['STATUS_MINHA'].fillna(df_final['Status'])
+            else:
+                df_final['Status'] = df_final['STATUS_MINHA']
+        
+        # 2. Responsável (Prioridade Minha)
+        if 'RESPONSAVEL_MINHA' in df_final.columns:
+            if 'RESPONSAVEL' in df_final.columns:
+                df_final['RESPONSAVEL'] = df_final['RESPONSAVEL_MINHA'].fillna(df_final['RESPONSAVEL'])
+            else:
+                df_final['RESPONSAVEL'] = df_final['RESPONSAVEL_MINHA']
+        
+        # 3. Solicitante (Se vazio no Geral, pega do Minha)
+        if 'SOLICITANTE_MINHA' in df_final.columns:
+            if 'SOLICITANTE' in df_final.columns:
+                df_final['SOLICITANTE'] = df_final['SOLICITANTE'].fillna(df_final['SOLICITANTE_MINHA'])
+            else:
+                df_final['SOLICITANTE'] = df_final['SOLICITANTE_MINHA']
+
+        # 4. Resumo/Título (Se vazio no Geral, pega do Minha)
+        if 'RESUMO_MINHA' in df_final.columns:
+            if 'TITULO' in df_final.columns:
+                df_final['TITULO'] = df_final['TITULO'].fillna(df_final['RESUMO_MINHA'])
+            else:
+                df_final['TITULO'] = df_final['RESUMO_MINHA']
+                
+        # 5. Datas (Se vazio no Geral, pega do Minha)
+        if 'DATA_RESOLUCAO_MINHA' in df_final.columns:
+             if 'DATA_RESOLUCAO' in df_final.columns:
+                 df_final['DATA_RESOLUCAO'] = df_final['DATA_RESOLUCAO'].fillna(df_final['DATA_RESOLUCAO_MINHA'])
+             else:
+                 df_final['DATA_RESOLUCAO'] = df_final['DATA_RESOLUCAO_MINHA']
+
+        if 'DATA_ABERTURA_MINHA' in df_final.columns:
+             if 'DATA_ABERTURA' in df_final.columns:
+                 df_final['DATA_ABERTURA'] = df_final['DATA_ABERTURA'].fillna(df_final['DATA_ABERTURA_MINHA'])
+             else:
+                 df_final['DATA_ABERTURA'] = df_final['DATA_ABERTURA_MINHA']
+
+        if 'DATA_PREV_SOLUCAO_MINHA' in df_final.columns:
+             if 'DATA_PREV_SOLUCAO' in df_final.columns:
+                 df_final['DATA_PREV_SOLUCAO'] = df_final['DATA_PREV_SOLUCAO'].fillna(df_final['DATA_PREV_SOLUCAO_MINHA'])
+             else:
+                 df_final['DATA_PREV_SOLUCAO'] = df_final['DATA_PREV_SOLUCAO_MINHA']
+            
     else:
         # Se não conseguir fazer merge, usar apenas df_req
         df_final = df_req.copy()
     
-    # Tratar colunas nulas
+    # Tratar colunas nulas essenciais
     if 'RESPONSAVEL' in df_final.columns:
-        df_final['RESPONSAVEL'] = df_final['RESPONSAVEL'].fillna('Proprietário Vazio')
+        df_final['RESPONSAVEL'] = df_final['RESPONSAVEL'].fillna('Sem Responsável')
+    if 'SOLICITANTE' in df_final.columns:
+        df_final['SOLICITANTE'] = df_final['SOLICITANTE'].fillna('N/A')
     
-    # Criar DATA_ALVO com nova lógica: prioridade é Data Esperada > DATA_QUEBRA_SLA > DATA_PREV_SOLUCAO
+    # Criar DATA_ALVO com nova lógica
     from datetime import datetime
     hoje = datetime.now().date()
     
