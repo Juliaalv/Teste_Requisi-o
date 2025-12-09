@@ -9,7 +9,7 @@ from components.sidebar import create_sidebar_filters
 from components.kanban import create_kanban_view
 from components.analytics import create_analytics
 from components.footer import create_footer
-s
+
 def main():
     """Função principal da aplicação com upload obrigatório"""
     # Configurar página
